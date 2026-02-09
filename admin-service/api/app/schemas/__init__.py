@@ -5,11 +5,31 @@ from app.schemas.auth import (
     RefreshRequest,
     UserResponse,
 )
+from app.schemas.project import (
+    ProjectCreate,
+    ProjectUpdate,
+    ProjectResponse,
+    ProjectDetailResponse,
+    ProjectListResponse,
+    VersionCreate,
+    VersionResponse,
+    VersionInfo,
+)
 
 __all__ = [
+    # Auth
     "LoginRequest",
     "LoginResponse",
     "TokenResponse",
     "RefreshRequest",
     "UserResponse",
+    # Project
+    "ProjectCreate",
+    "ProjectUpdate",
+    "ProjectResponse",
+    "ProjectDetailResponse",
+    "ProjectListResponse",
+    "VersionCreate",
+    "VersionResponse",
+    "VersionInfo",
 ]

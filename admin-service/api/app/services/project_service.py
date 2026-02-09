@@ -1,0 +1,231 @@
+from typing import List, Optional, Tuple
+from uuid import UUID
+
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.models.project import Project
+from app.models.version import ProjectVersion
+from app.models.config import ProjectConfig
+from app.schemas.project import ProjectCreate, ProjectUpdate, VersionCreate
+
+
+class ProjectService:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    async def list_projects(
+        self, skip: int = 0, limit: int = 20
+    ) -> Tuple[List[Project], int]:
+        """List active projects with pagination."""
+        # Get total count
+        count_result = await self.db.execute(
+            select(func.count(Project.id)).where(Project.is_active == True)
+        )
+        total = count_result.scalar_one()
+
+        # Get projects
+        result = await self.db.execute(
+            select(Project)
+            .where(Project.is_active == True)
+            .order_by(Project.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        projects = result.scalars().all()
+
+        return list(projects), total
+
+    async def get_project_by_slug(self, slug: str) -> Optional[Project]:
+        """Get project by slug with versions loaded."""
+        result = await self.db.execute(
+            select(Project)
+            .options(selectinload(Project.versions))
+            .where(Project.slug == slug, Project.is_active == True)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_project_by_id(self, project_id: UUID) -> Optional[Project]:
+        """Get project by ID."""
+        result = await self.db.execute(
+            select(Project)
+            .options(selectinload(Project.versions))
+            .where(Project.id == project_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def slug_exists(self, slug: str) -> bool:
+        """Check if slug already exists."""
+        result = await self.db.execute(
+            select(func.count(Project.id)).where(Project.slug == slug)
+        )
+        return result.scalar_one() > 0
+
+    async def create_project(
+        self, data: ProjectCreate, user_id: UUID
+    ) -> Project:
+        """Create project with initial draft version."""
+        # Create project
+        project = Project(
+            slug=data.slug,
+            name=data.name,
+            name_ar=data.name_ar,
+            description=data.description,
+            created_by=user_id,
+            is_active=True,
+        )
+        self.db.add(project)
+        await self.db.flush()
+
+        # Create initial version (v1 draft)
+        version = ProjectVersion(
+            project_id=project.id,
+            version_number=1,
+            status="draft",
+        )
+        self.db.add(version)
+        await self.db.flush()
+
+        # Create default config for the version
+        config = ProjectConfig(
+            version_id=version.id,
+            theme={},
+            map_settings={},
+            status_colors={
+                "available": "#52c41a",
+                "reserved": "#faad14",
+                "sold": "#ff4d4f",
+                "hidden": "#8c8c8c",
+                "unreleased": "#d9d9d9"
+            },
+            popup_config={},
+            filter_config={},
+        )
+        self.db.add(config)
+
+        await self.db.commit()
+        await self.db.refresh(project)
+
+        # Reload with versions
+        return await self.get_project_by_id(project.id)
+
+    async def update_project(
+        self, slug: str, data: ProjectUpdate
+    ) -> Optional[Project]:
+        """Update project fields."""
+        project = await self.get_project_by_slug(slug)
+        if not project:
+            return None
+
+        update_data = data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(project, field, value)
+
+        await self.db.commit()
+        await self.db.refresh(project)
+        return project
+
+    async def delete_project(self, slug: str) -> bool:
+        """Soft delete project (set is_active=False)."""
+        result = await self.db.execute(
+            select(Project).where(Project.slug == slug, Project.is_active == True)
+        )
+        project = result.scalar_one_or_none()
+
+        if not project:
+            return False
+
+        project.is_active = False
+        await self.db.commit()
+        return True
+
+    async def create_version(
+        self, project_id: UUID, data: VersionCreate
+    ) -> Optional[ProjectVersion]:
+        """Create new version for a project."""
+        project = await self.get_project_by_id(project_id)
+        if not project:
+            return None
+
+        # Get next version number
+        result = await self.db.execute(
+            select(func.max(ProjectVersion.version_number))
+            .where(ProjectVersion.project_id == project_id)
+        )
+        max_version = result.scalar_one() or 0
+        new_version_number = max_version + 1
+
+        # Create new version
+        version = ProjectVersion(
+            project_id=project_id,
+            version_number=new_version_number,
+            status="draft",
+        )
+        self.db.add(version)
+        await self.db.flush()
+
+        # Create config (optionally cloned from base version)
+        if data.base_version:
+            # Find base version config
+            base_result = await self.db.execute(
+                select(ProjectVersion)
+                .options(selectinload(ProjectVersion.config))
+                .where(
+                    ProjectVersion.project_id == project_id,
+                    ProjectVersion.version_number == data.base_version
+                )
+            )
+            base_version = base_result.scalar_one_or_none()
+
+            if base_version and base_version.config:
+                # Clone config
+                config = ProjectConfig(
+                    version_id=version.id,
+                    theme=base_version.config.theme,
+                    map_settings=base_version.config.map_settings,
+                    status_colors=base_version.config.status_colors,
+                    popup_config=base_version.config.popup_config,
+                    filter_config=base_version.config.filter_config,
+                )
+            else:
+                config = self._create_default_config(version.id)
+        else:
+            config = self._create_default_config(version.id)
+
+        self.db.add(config)
+        await self.db.commit()
+        await self.db.refresh(version)
+
+        return version
+
+    def _create_default_config(self, version_id: UUID) -> ProjectConfig:
+        """Create default project config."""
+        return ProjectConfig(
+            version_id=version_id,
+            theme={},
+            map_settings={},
+            status_colors={
+                "available": "#52c41a",
+                "reserved": "#faad14",
+                "sold": "#ff4d4f",
+                "hidden": "#8c8c8c",
+                "unreleased": "#d9d9d9"
+            },
+            popup_config={},
+            filter_config={},
+        )
+
+    async def get_version(
+        self, project_id: UUID, version_number: int
+    ) -> Optional[ProjectVersion]:
+        """Get specific version of a project."""
+        result = await self.db.execute(
+            select(ProjectVersion)
+            .options(selectinload(ProjectVersion.config))
+            .where(
+                ProjectVersion.project_id == project_id,
+                ProjectVersion.version_number == version_number
+            )
+        )
+        return result.scalar_one_or_none()

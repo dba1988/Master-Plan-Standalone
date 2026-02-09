@@ -1,7 +1,7 @@
 # TASK-004: Project CRUD
 
 **Phase**: 1 - Foundation
-**Status**: [ ] Not Started
+**Status**: [x] Completed
 **Priority**: P0 - Critical
 **Depends On**: TASK-003
 **Service**: **admin-service**
@@ -119,12 +119,12 @@ Extends ProjectResponse with:
 
 ## Acceptance Criteria
 
-- [ ] Can list all projects (paginated)
-- [ ] Can create project with unique slug
-- [ ] Slug validation enforced
-- [ ] Initial version created automatically
-- [ ] Can get project details with versions
-- [ ] Can update project name/description
-- [ ] Can soft delete project
-- [ ] Can create new version
-- [ ] Role-based access enforced
+- [x] Can list all projects (paginated)
+- [x] Can create project with unique slug
+- [x] Slug validation enforced
+- [x] Initial version created automatically
+- [x] Can get project details with versions
+- [x] Can update project name/description
+- [x] Can soft delete project
+- [x] Can create new version
+- [x] Role-based access enforced
