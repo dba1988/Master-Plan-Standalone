@@ -19,7 +19,7 @@ Create endpoints for managing project-level configuration:
 ## Files to Create
 
 ```
-admin-api/app/
+admin-service/api/app/
 ├── schemas/
 │   └── config.py
 ├── api/
@@ -76,7 +76,7 @@ class ProjectConfigResponse(ProjectConfigBase):
     class Config:
         from_attributes = True
 
-# Default styles - MUST match gsd/parity/STATUS-TAXONOMY.md (7 canonical statuses)
+# Default styles - MUST match gsd/parity/STATUS-TAXONOMY.md (5 canonical statuses)
 DEFAULT_UNIT_STYLES = {
     "unit": {
         "available": {
@@ -91,34 +91,22 @@ DEFAULT_UNIT_STYLES = {
             "stroke": "#FFFFFF",
             "strokeWidth": 1
         },
-        "hold": {
-            "fill": "rgba(255, 152, 0, 0.70)",
-            "fillOpacity": 0.7,
-            "stroke": "#FFFFFF",
-            "strokeWidth": 1
-        },
         "sold": {
             "fill": "rgba(211, 47, 47, 0.70)",
             "fillOpacity": 0.7,
             "stroke": "#FFFFFF",
             "strokeWidth": 1
         },
-        "unreleased": {
+        "hidden": {
             "fill": "rgba(158, 158, 158, 0.50)",
             "fillOpacity": 0.5,
             "stroke": "#CCCCCC",
             "strokeWidth": 1
         },
-        "unavailable": {
+        "unreleased": {
             "fill": "rgba(97, 97, 97, 0.40)",
             "fillOpacity": 0.4,
             "stroke": "#888888",
-            "strokeWidth": 1
-        },
-        "coming-soon": {
-            "fill": "rgba(123, 31, 162, 0.50)",
-            "fillOpacity": 0.5,
-            "stroke": "#FFFFFF",
             "strokeWidth": 1
         }
     },

@@ -4,24 +4,16 @@
 **Status**: [ ] Not Started
 **Priority**: P0 - Critical
 **Depends On**: TASK-003
+**Service**: **admin-service**
 
 ## Objective
 
 Set up the Admin UI React application with authentication flow.
 
-## Description
-
-Create the foundation for the Admin UI:
-- React app with Vite
-- Ant Design components
-- Authentication context and login page
-- Protected route wrapper
-- API client with token refresh
-
 ## Files to Create
 
 ```
-admin-ui/
+admin-service/ui/
 ├── src/
 │   ├── App.jsx
 │   ├── main.jsx
@@ -38,385 +30,136 @@ admin-ui/
 └── package.json
 ```
 
-## Implementation Steps
+## Dependencies
 
-### Step 1: Package.json
-```json
-{
-  "name": "masterplan-admin-ui",
-  "version": "1.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite --port 3001",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^6.21.0",
-    "antd": "^5.12.0",
-    "@ant-design/icons": "^5.2.6",
-    "@tanstack/react-query": "^5.17.0",
-    "axios": "^1.6.0"
-  },
-  "devDependencies": {
-    "@vitejs/plugin-react": "^4.2.0",
-    "vite": "^5.0.0"
-  }
-}
+| Package | Purpose |
+|---------|---------|
+| `react` | UI framework |
+| `react-router-dom` | Routing |
+| `antd` | Component library |
+| `@ant-design/icons` | Icons |
+| `@tanstack/react-query` | Server state |
+| `axios` | HTTP client |
+| `vite` | Build tool |
+
+## API Client Requirements
+
+### Token Management
+
+- Store access token in memory (not localStorage)
+- Store refresh token in localStorage
+- Attach `Authorization: Bearer {token}` to all requests
+
+### Token Refresh Flow
+
+Critical for seamless UX - intercept 401 responses:
+
+```
+1. Request fails with 401
+2. Check if refresh token exists
+3. POST /api/auth/refresh with refresh_token
+4. On success: update tokens, retry original request
+5. On failure: clear tokens, redirect to /login
 ```
 
-### Step 2: API Client
-```jsx
-// src/services/api.js
-import axios from 'axios';
+The interceptor must:
+- Prevent infinite retry loops (`_retry` flag)
+- Handle concurrent requests during refresh
+- Clear state and redirect on refresh failure
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+## Auth Context
 
-const api = axios.create({
-  baseURL: `${API_URL}/api`,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
+### State
 
-// Token management
-let accessToken = null;
-let refreshToken = null;
+| Field | Type | Description |
+|-------|------|-------------|
+| `user` | object | Current user or null |
+| `loading` | bool | Initial auth check in progress |
+| `isAuthenticated` | bool | Whether user is logged in |
 
-export const setTokens = (access, refresh) => {
-  accessToken = access;
-  refreshToken = refresh;
-  localStorage.setItem('refreshToken', refresh);
-};
+### Methods
 
-export const clearTokens = () => {
-  accessToken = null;
-  refreshToken = null;
-  localStorage.removeItem('refreshToken');
-};
+| Method | Description |
+|--------|-------------|
+| `login(email, password)` | Call API, store tokens, set user |
+| `logout()` | Call API, clear tokens, clear user |
 
-export const getStoredRefreshToken = () => {
-  return localStorage.getItem('refreshToken');
-};
+### Initial Load Behavior
 
-// Request interceptor - add auth header
-api.interceptors.request.use((config) => {
-  if (accessToken) {
-    config.headers.Authorization = `Bearer ${accessToken}`;
-  }
-  return config;
-});
+On app start:
+1. Check for stored refresh token
+2. If exists, call `GET /auth/me` to restore session
+3. If fails, clear tokens
+4. Set `loading = false` when done
 
-// Response interceptor - handle token refresh
-api.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const originalRequest = error.config;
+## Login Page
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
+### Elements
 
-      try {
-        const storedRefresh = refreshToken || getStoredRefreshToken();
-        if (!storedRefresh) {
-          throw new Error('No refresh token');
-        }
+- Centered card with app title "Master Plan Studio"
+- Email input with validation
+- Password input
+- Submit button with loading state
+- Error message display
 
-        const response = await axios.post(`${API_URL}/api/auth/refresh`, {
-          refresh_token: storedRefresh,
-        });
+### Behavior
 
-        const { access_token, refresh_token } = response.data;
-        setTokens(access_token, refresh_token);
+- On submit: call `login(email, password)`
+- On success: redirect to original destination (or `/`)
+- On error: show error message from API
 
-        originalRequest.headers.Authorization = `Bearer ${access_token}`;
-        return api(originalRequest);
-      } catch (refreshError) {
-        clearTokens();
-        window.location.href = '/login';
-        return Promise.reject(refreshError);
-      }
-    }
+## Protected Route
 
-    return Promise.reject(error);
-  }
-);
+Wrapper component that:
+1. Shows spinner while `loading` is true
+2. Redirects to `/login` if not authenticated (preserve intended path)
+3. Renders children if authenticated
 
-// Auth API
-export const authApi = {
-  login: (email, password) =>
-    api.post('/auth/login', { email, password }),
+## App Structure
 
-  logout: () =>
-    api.post('/auth/logout', { refresh_token: refreshToken }),
+### Route Configuration
 
-  me: () => api.get('/auth/me'),
-};
+| Path | Component | Protected |
+|------|-----------|-----------|
+| `/login` | LoginPage | No |
+| `/*` | Layout | Yes |
 
-// Projects API
-export const projectsApi = {
-  list: () => api.get('/projects'),
-  get: (slug) => api.get(`/projects/${slug}`),
-  create: (data) => api.post('/projects', data),
-  update: (slug, data) => api.put(`/projects/${slug}`, data),
-  delete: (slug) => api.delete(`/projects/${slug}`),
-};
+### Provider Hierarchy
 
-export default api;
+```
+QueryClientProvider
+  └── ConfigProvider (Ant Design theme)
+      └── AuthProvider
+          └── BrowserRouter
+              └── Routes
 ```
 
-### Step 3: Auth Context
-```jsx
-// src/contexts/AuthContext.jsx
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authApi, setTokens, clearTokens, getStoredRefreshToken } from '../services/api';
+### Theme
 
-const AuthContext = createContext(null);
+Primary color: `#3F5277` (brand color)
 
-export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+## API Module Exports
 
-  useEffect(() => {
-    // Check for existing session
-    const checkAuth = async () => {
-      const refreshToken = getStoredRefreshToken();
-      if (refreshToken) {
-        try {
-          const response = await authApi.me();
-          setUser(response.data);
-        } catch (error) {
-          clearTokens();
-        }
-      }
-      setLoading(false);
-    };
+| Export | Description |
+|--------|-------------|
+| `default` (api) | Configured axios instance |
+| `setTokens(access, refresh)` | Store tokens |
+| `clearTokens()` | Clear tokens |
+| `authApi` | Auth endpoints (login, logout, me) |
+| `projectsApi` | Projects CRUD |
 
-    checkAuth();
-  }, []);
+## Environment Variables
 
-  const login = async (email, password) => {
-    const response = await authApi.login(email, password);
-    const { access_token, refresh_token, user } = response.data;
-    setTokens(access_token, refresh_token);
-    setUser(user);
-    return user;
-  };
-
-  const logout = async () => {
-    try {
-      await authApi.logout();
-    } catch (error) {
-      // Ignore logout errors
-    }
-    clearTokens();
-    setUser(null);
-  };
-
-  const value = {
-    user,
-    loading,
-    isAuthenticated: !!user,
-    login,
-    logout,
-  };
-
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
-  }
-  return context;
-}
-```
-
-### Step 4: Login Page
-```jsx
-// src/pages/LoginPage.jsx
-import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { Form, Input, Button, Card, message, Typography } from 'antd';
-import { UserOutlined, LockOutlined } from '@ant-design/icons';
-import { useAuth } from '../contexts/AuthContext';
-
-const { Title } = Typography;
-
-export default function LoginPage() {
-  const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  const from = location.state?.from?.pathname || '/';
-
-  const onFinish = async (values) => {
-    setLoading(true);
-    try {
-      await login(values.email, values.password);
-      message.success('Login successful');
-      navigate(from, { replace: true });
-    } catch (error) {
-      message.error(error.response?.data?.detail || 'Login failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: '#f0f2f5',
-    }}>
-      <Card style={{ width: 400, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
-        <Title level={2} style={{ textAlign: 'center', marginBottom: 32 }}>
-          Master Plan Studio
-        </Title>
-
-        <Form
-          name="login"
-          onFinish={onFinish}
-          layout="vertical"
-          requiredMark={false}
-        >
-          <Form.Item
-            name="email"
-            rules={[
-              { required: true, message: 'Please enter your email' },
-              { type: 'email', message: 'Please enter a valid email' },
-            ]}
-          >
-            <Input
-              prefix={<UserOutlined />}
-              placeholder="Email"
-              size="large"
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="password"
-            rules={[{ required: true, message: 'Please enter your password' }]}
-          >
-            <Input.Password
-              prefix={<LockOutlined />}
-              placeholder="Password"
-              size="large"
-            />
-          </Form.Item>
-
-          <Form.Item>
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={loading}
-              size="large"
-              block
-            >
-              Sign In
-            </Button>
-          </Form.Item>
-        </Form>
-      </Card>
-    </div>
-  );
-}
-```
-
-### Step 5: Protected Route
-```jsx
-// src/components/ProtectedRoute.jsx
-import React from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
-import { Spin } from 'antd';
-import { useAuth } from '../contexts/AuthContext';
-
-export default function ProtectedRoute({ children }) {
-  const { isAuthenticated, loading } = useAuth();
-  const location = useLocation();
-
-  if (loading) {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}>
-        <Spin size="large" />
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-
-  return children;
-}
-```
-
-### Step 6: App Component
-```jsx
-// src/App.jsx
-import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ConfigProvider } from 'antd';
-import { AuthProvider } from './contexts/AuthContext';
-import ProtectedRoute from './components/ProtectedRoute';
-import LoginPage from './pages/LoginPage';
-import Layout from './components/Layout';
-
-const queryClient = new QueryClient();
-
-export default function App() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <ConfigProvider
-        theme={{
-          token: {
-            colorPrimary: '#3F5277',
-          },
-        }}
-      >
-        <AuthProvider>
-          <BrowserRouter>
-            <Routes>
-              <Route path="/login" element={<LoginPage />} />
-              <Route
-                path="/*"
-                element={
-                  <ProtectedRoute>
-                    <Layout />
-                  </ProtectedRoute>
-                }
-              />
-            </Routes>
-          </BrowserRouter>
-        </AuthProvider>
-      </ConfigProvider>
-    </QueryClientProvider>
-  );
-}
-```
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VITE_API_URL` | `http://localhost:8000` | API base URL |
 
 ## Acceptance Criteria
 
 - [ ] React app starts on port 3001
 - [ ] Login form works with API
-- [ ] Tokens stored in localStorage
-- [ ] Token refresh works automatically
+- [ ] Tokens stored correctly (refresh in localStorage)
+- [ ] Token refresh works automatically on 401
 - [ ] Protected routes redirect to login
-- [ ] Logout clears tokens
-- [ ] Ant Design theme configured
+- [ ] Logout clears tokens and redirects
+- [ ] Ant Design theme configured with brand color

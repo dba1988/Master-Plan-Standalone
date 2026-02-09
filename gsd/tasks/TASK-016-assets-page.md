@@ -12,7 +12,7 @@ Create the asset upload and management interface.
 ## Files to Create
 
 ```
-admin-ui/src/pages/
+admin-service/ui/src/pages/
 └── AssetsPage.jsx
 ```
 

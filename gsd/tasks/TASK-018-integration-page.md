@@ -12,7 +12,7 @@ Create the client API integration configuration UI.
 ## Files to Create
 
 ```
-admin-ui/src/pages/
+admin-service/ui/src/pages/
 └── IntegrationPage.jsx
 ```
 

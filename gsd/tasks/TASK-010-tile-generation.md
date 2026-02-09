@@ -1,9 +1,15 @@
 # TASK-010: Tile Generation Service
 
 **Phase**: 4 - Build Pipeline
-**Status**: [ ] Not Started
-**Priority**: P0 - Critical
+**Status**: [DEPRECATED] Split into TASK-010a + TASK-010b
+**Priority**: P2 - Low (deprecated)
 **Depends On**: TASK-005
+
+> **⚠️ DEPRECATED**: This task has been split into:
+> - **TASK-010a**: Tile Generation Core (pyvips service)
+> - **TASK-010b**: Tile Job Integration (background job + upload)
+>
+> See those tasks for the current implementation plan.
 
 ## Objective
 
@@ -20,7 +26,7 @@ Create a service that:
 ## Files to Create
 
 ```
-admin-api/app/services/
+admin-service/api/app/services/
 └── tile_service.py
 ```
 

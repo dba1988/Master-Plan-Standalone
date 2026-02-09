@@ -1,21 +1,24 @@
-# TASK-001: Project Scaffold
+# TASK-001: Admin Service Scaffold
 
 **Phase**: 1 - Foundation
 **Status**: [ ] Not Started
 **Priority**: P0 - Critical
 **Depends On**: None
+**Blocks**: TASK-002, TASK-003, TASK-004
 
 ## Objective
 
-Set up the monorepo structure with all three services and Docker Compose for local development.
+Set up the **admin-service** directory structure with admin API (FastAPI) and admin UI (React) scaffolds.
 
 ## Description
 
-Create the foundational project structure that will house:
+Create the foundational project structure for **admin-service** only:
 - Admin API (FastAPI + Python)
 - Admin UI (React + Vite)
-- Map Viewer (React + Vite)
-- Shared Docker Compose configuration
+- Database migrations (Alembic)
+- Docker Compose configuration
+
+**Note**: Public service scaffold is in TASK-001b (separate task).
 
 ## Files to Create
 
@@ -27,55 +30,56 @@ master-plan-standalone/
 ├── .gitignore
 ├── README.md
 │
-├── admin-api/
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   ├── .env.example
-│   ├── alembic.ini
-│   ├── alembic/
-│   │   ├── env.py
-│   │   └── versions/
-│   │       └── .gitkeep
-│   └── app/
-│       ├── __init__.py
-│       ├── main.py
-│       ├── core/
-│       │   ├── __init__.py
-│       │   ├── config.py
-│       │   ├── database.py
-│       │   └── security.py
-│       ├── models/
-│       │   └── __init__.py
-│       ├── schemas/
-│       │   └── __init__.py
-│       ├── api/
-│       │   ├── __init__.py
-│       │   └── health.py
-│       └── services/
-│           └── __init__.py
+├── admin-service/              # ADMIN SERVICE ONLY
+│   ├── api/
+│   │   ├── Dockerfile
+│   │   ├── requirements.txt
+│   │   ├── .env.example
+│   │   ├── alembic.ini
+│   │   ├── alembic/
+│   │   │   ├── env.py
+│   │   │   └── versions/
+│   │   │       └── .gitkeep
+│   │   └── app/
+│   │       ├── __init__.py
+│   │       ├── main.py
+│   │       ├── lib/
+│   │       │   ├── __init__.py
+│   │       │   ├── config.py
+│   │       │   ├── database.py
+│   │       │   └── security.py
+│   │       ├── models/
+│   │       │   └── __init__.py
+│   │       ├── features/
+│   │       │   ├── __init__.py
+│   │       │   └── health/
+│   │       │       └── routes.py
+│   │       └── infra/
+│   │           └── __init__.py
+│   │
+│   └── ui/
+│       ├── Dockerfile
+│       ├── package.json
+│       ├── vite.config.js
+│       ├── index.html
+│       ├── .env.example
+│       └── src/
+│           ├── App.jsx
+│           ├── main.jsx
+│           ├── index.css
+│           ├── lib/
+│           │   └── api-client.js
+│           ├── styles/
+│           │   ├── tokens.js
+│           │   └── globals.css
+│           └── features/
+│               └── .gitkeep
 │
-├── admin-ui/
-│   ├── Dockerfile
-│   ├── package.json
-│   ├── vite.config.js
-│   ├── index.html
-│   ├── .env.example
-│   └── src/
-│       ├── App.jsx
-│       ├── main.jsx
-│       └── index.css
-│
-└── map-viewer/
-    ├── Dockerfile
-    ├── package.json
-    ├── vite.config.js
-    ├── index.html
-    ├── .env.example
-    └── src/
-        ├── App.jsx
-        ├── main.jsx
-        └── index.css
+└── public-service/             # Created in TASK-001b
+    └── .gitkeep
 ```
+
+**Note**: `public-service/` structure is defined in TASK-001b.
 
 ## Implementation Steps
 
@@ -102,43 +106,65 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  # ADMIN SERVICE
   admin-api:
-    build: ./admin-api
+    build: ./admin-service/api
     ports:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql+asyncpg://masterplan:masterplan_dev@postgres:5432/masterplan
       SECRET_KEY: dev-secret-key-change-in-production
+      R2_ENDPOINT: http://minio:9000
+      R2_ACCESS_KEY: minioadmin
+      R2_SECRET_KEY: minioadmin
+      R2_BUCKET: masterplan
     depends_on:
       - postgres
     volumes:
-      - ./admin-api:/app
+      - ./admin-service/api:/app
 
   admin-ui:
-    build: ./admin-ui
+    build: ./admin-service/ui
     ports:
       - "3001:3001"
     environment:
       VITE_API_URL: http://localhost:8000
     volumes:
-      - ./admin-ui:/app
+      - ./admin-service/ui:/app
       - /app/node_modules
 
-  map-viewer:
-    build: ./map-viewer
+  # PUBLIC SERVICE (defined in TASK-001b, placeholder here)
+  # public-api:
+  #   build: ./public-service/api
+  #   ports:
+  #     - "8001:8001"
+  #
+  # viewer:
+  #   build: ./public-service/viewer
+  #   ports:
+  #     - "3000:3000"
+
+  # MinIO for local R2 simulation
+  minio:
+    image: minio/minio:latest
     ports:
-      - "3000:3000"
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
     volumes:
-      - ./map-viewer:/app
-      - /app/node_modules
+      - minio_data:/data
 
 volumes:
   postgres_data:
+  minio_data:
 ```
 
 ### Step 3: Create Admin API Base
 ```python
-# admin-api/app/main.py
+# admin-service/api/app/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
@@ -180,18 +206,14 @@ passlib[bcrypt]==1.7.4
 python-multipart==0.0.6
 ```
 
-### Step 5: Create React Apps
+### Step 5: Create Admin UI React App
 ```bash
-# Admin UI
-cd admin-ui
+cd admin-service/ui
 npm create vite@latest . -- --template react
 npm install antd @ant-design/icons @tanstack/react-query axios react-router-dom
-
-# Map Viewer
-cd ../map-viewer
-npm create vite@latest . -- --template react
-npm install openseadragon
 ```
+
+> **Note**: Map Viewer setup is in TASK-001b (public-service scaffold).
 
 ### Step 6: Create .env.example
 ```bash
@@ -207,19 +229,20 @@ GCS_BUCKET=
 ### Step 7: Verify Setup
 ```bash
 docker-compose up -d postgres
-cd admin-api && pip install -r requirements.txt
+cd admin-service/api && pip install -r requirements.txt
 python -m uvicorn app.main:app --reload --port 8000
 # Visit http://localhost:8000/docs
 ```
 
 ## Acceptance Criteria
 
-- [ ] All directories created with correct structure
-- [ ] `docker-compose up` starts PostgreSQL
-- [ ] Admin API starts and shows Swagger docs at /docs
+- [ ] `admin-service/api/` directory created with correct structure
+- [ ] `admin-service/ui/` directory created with correct structure
+- [ ] `docker-compose up` starts PostgreSQL + MinIO
+- [ ] Admin API starts and shows Swagger docs at /docs (port 8000)
 - [ ] Admin UI starts on port 3001
-- [ ] Map Viewer starts on port 3000
 - [ ] Git repository initialized with .gitignore
+- [ ] **No public-service code** (that's TASK-001b)
 
 ## Notes
 

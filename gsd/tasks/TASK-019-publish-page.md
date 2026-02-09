@@ -3,7 +3,7 @@
 **Phase**: 5 - Admin UI
 **Status**: [ ] Not Started
 **Priority**: P0 - Critical
-**Depends On**: TASK-013, TASK-015
+**Depends On**: TASK-013b (publish workflow), TASK-015
 
 ## Objective
 
@@ -12,7 +12,7 @@ Create the build and publish workflow UI.
 ## Files to Create
 
 ```
-admin-ui/src/pages/
+admin-service/ui/src/pages/
 └── PublishPage.jsx
 ```
 

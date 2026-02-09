@@ -23,7 +23,7 @@ Create all database tables required for the MVP:
 ## Files to Create/Modify
 
 ```
-admin-api/
+admin-service/api/
 ├── alembic/
 │   ├── env.py (modify for async)
 │   └── versions/
@@ -194,7 +194,7 @@ class Overlay(Base):
 
 ### Step 6: Create Migration
 ```bash
-cd admin-api
+cd admin-service/api
 alembic revision --autogenerate -m "Initial schema"
 alembic upgrade head
 ```

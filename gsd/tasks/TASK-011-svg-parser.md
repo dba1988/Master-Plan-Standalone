@@ -20,7 +20,7 @@ Create a service that:
 ## Files to Create
 
 ```
-admin-api/app/services/
+admin-service/api/app/services/
 └── svg_parser.py
 ```
 

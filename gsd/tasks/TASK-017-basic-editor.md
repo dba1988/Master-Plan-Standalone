@@ -1,18 +1,25 @@
 # TASK-017: Basic Editor
 
 **Phase**: 5 - Admin UI
-**Status**: [ ] Not Started
-**Priority**: P0 - Critical
+**Status**: [DEPRECATED] Split into TASK-017a + TASK-017b
+**Priority**: P2 - Low (deprecated)
 **Depends On**: TASK-007, TASK-016
+**Service**: **admin-service**
+
+> **⚠️ DEPRECATED**: This task has been split into:
+> - **TASK-017a**: Editor Canvas (map canvas + pan/zoom)
+> - **TASK-017b**: Editor Inspector (tools panel + inspector)
+>
+> See those tasks for the current implementation plan.
 
 ## Objective
 
-Create a simplified map editor for viewing and editing overlays.
+Create a simplified map editor for viewing and editing overlays in the admin UI.
 
 ## Files to Create
 
 ```
-admin-ui/src/
+admin-service/ui/src/
 ├── pages/
 │   └── EditorPage.jsx
 └── components/
@@ -22,485 +29,130 @@ admin-ui/src/
         └── InspectorPanel.jsx
 ```
 
-## Implementation
+## Page Layout
 
-### Editor Page (Simplified)
-```jsx
-// src/pages/EditorPage.jsx
-import React, { useState, useEffect, useRef } from 'react';
-import { useParams } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Layout, Button, message, Spin, Empty } from 'antd';
-import { SaveOutlined } from '@ant-design/icons';
-import api from '../services/api';
-import MapCanvas from '../components/editor/MapCanvas';
-import ToolsPanel from '../components/editor/ToolsPanel';
-import InspectorPanel from '../components/editor/InspectorPanel';
-
-const { Sider, Content } = Layout;
-
-export default function EditorPage() {
-  const { slug } = useParams();
-  const queryClient = useQueryClient();
-  const [selectedOverlay, setSelectedOverlay] = useState(null);
-  const [overlays, setOverlays] = useState([]);
-  const [hasChanges, setHasChanges] = useState(false);
-
-  // Get project and draft version
-  const { data: project } = useQuery({
-    queryKey: ['project', slug],
-    queryFn: () => api.get(`/projects/${slug}`).then(res => res.data),
-  });
-
-  const draftVersion = project?.versions?.find(v => v.status === 'draft')?.version_number;
-
-  // Fetch overlays
-  const { data: overlaysData, isLoading } = useQuery({
-    queryKey: ['overlays', slug, draftVersion],
-    queryFn: () =>
-      api.get(`/projects/${slug}/versions/${draftVersion}/overlays`)
-        .then(res => res.data),
-    enabled: !!draftVersion,
-  });
-
-  // Fetch config for viewBox
-  const { data: config } = useQuery({
-    queryKey: ['config', slug, draftVersion],
-    queryFn: () =>
-      api.get(`/projects/${slug}/versions/${draftVersion}/config`)
-        .then(res => res.data),
-    enabled: !!draftVersion,
-  });
-
-  // Initialize overlays from API
-  useEffect(() => {
-    if (overlaysData?.overlays) {
-      setOverlays(overlaysData.overlays);
-    }
-  }, [overlaysData]);
-
-  // Save mutation
-  const saveMutation = useMutation({
-    mutationFn: (updates) =>
-      api.post(`/projects/${slug}/versions/${draftVersion}/overlays/bulk`, {
-        overlays: updates.map(o => ({
-          overlay_type: o.overlay_type,
-          ref: o.ref,
-          geometry: o.geometry,
-          label: o.label,
-          label_position: o.label_position,
-          props: o.props,
-          style_override: o.style_override,
-        })),
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries(['overlays', slug]);
-      message.success('Changes saved');
-      setHasChanges(false);
-    },
-    onError: () => {
-      message.error('Failed to save changes');
-    },
-  });
-
-  const handleOverlayUpdate = (id, updates) => {
-    setOverlays(prev =>
-      prev.map(o =>
-        o.id === id ? { ...o, ...updates } : o
-      )
-    );
-    setHasChanges(true);
-  };
-
-  const handleSave = () => {
-    const changedOverlays = overlays.filter(o => {
-      const original = overlaysData?.overlays?.find(orig => orig.id === o.id);
-      return JSON.stringify(o) !== JSON.stringify(original);
-    });
-
-    if (changedOverlays.length > 0) {
-      saveMutation.mutate(changedOverlays);
-    }
-  };
-
-  if (!draftVersion) {
-    return <Empty description="No draft version available" />;
-  }
-
-  if (isLoading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
-        <Spin size="large" />
-      </div>
-    );
-  }
-
-  return (
-    <Layout style={{ height: 'calc(100vh - 180px)', background: '#fff' }}>
-      {/* Left Panel - Tools */}
-      <Sider width={250} theme="light" style={{ borderRight: '1px solid #f0f0f0' }}>
-        <ToolsPanel
-          overlays={overlays}
-          selectedId={selectedOverlay?.id}
-          onSelect={(overlay) => setSelectedOverlay(overlay)}
-        />
-      </Sider>
-
-      {/* Center - Canvas */}
-      <Content style={{ position: 'relative', overflow: 'hidden' }}>
-        <MapCanvas
-          overlays={overlays}
-          viewBox={config?.default_view_box || '0 0 4096 4096'}
-          selectedId={selectedOverlay?.id}
-          onSelect={(overlay) => setSelectedOverlay(overlay)}
-        />
-
-        {/* Save Button */}
-        <Button
-          type="primary"
-          icon={<SaveOutlined />}
-          onClick={handleSave}
-          loading={saveMutation.isPending}
-          disabled={!hasChanges}
-          style={{
-            position: 'absolute',
-            top: 16,
-            right: 16,
-            zIndex: 10,
-          }}
-        >
-          Save Changes
-        </Button>
-      </Content>
-
-      {/* Right Panel - Inspector */}
-      <Sider width={300} theme="light" style={{ borderLeft: '1px solid #f0f0f0' }}>
-        <InspectorPanel
-          overlay={selectedOverlay}
-          onUpdate={(updates) => {
-            if (selectedOverlay) {
-              handleOverlayUpdate(selectedOverlay.id, updates);
-              setSelectedOverlay({ ...selectedOverlay, ...updates });
-            }
-          }}
-        />
-      </Sider>
-    </Layout>
-  );
-}
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  ┌──────────┐  ┌────────────────────────────────┐  ┌─────────────┐ │
+│  │          │  │                                │  │             │ │
+│  │  Tools   │  │         Map Canvas             │  │  Inspector  │ │
+│  │  Panel   │  │                                │  │  Panel      │ │
+│  │          │  │     [Save Changes]             │  │             │ │
+│  │  250px   │  │                                │  │    300px    │ │
+│  │          │  │                                │  │             │ │
+│  └──────────┘  └────────────────────────────────┘  └─────────────┘ │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-### Map Canvas
-```jsx
-// src/components/editor/MapCanvas.jsx
-import React, { useRef, useEffect, useState } from 'react';
+## Component Responsibilities
 
-export default function MapCanvas({ overlays, viewBox, selectedId, onSelect }) {
-  const svgRef = useRef(null);
-  const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
-  const [isPanning, setIsPanning] = useState(false);
-  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+### EditorPage
+- Route: `/projects/:slug/editor`
+- Fetch project, draft version, overlays, config
+- Track selected overlay state
+- Track unsaved changes state
+- Handle save mutation (bulk update)
 
-  // Parse viewBox
-  const [vbX, vbY, vbW, vbH] = viewBox.split(' ').map(Number);
+### MapCanvas
+- Render SVG with overlays
+- Pan: Click-drag on background
+- Zoom: Mouse wheel
+- Click overlay to select
+- Highlight selected overlay
+- Show labels at label_position
 
-  // Pan handlers
-  const handleMouseDown = (e) => {
-    if (e.target === svgRef.current) {
-      setIsPanning(true);
-      setPanStart({ x: e.clientX - transform.x, y: e.clientY - transform.y });
-    }
-  };
+### ToolsPanel (Left)
+- Search input to filter overlays
+- Collapsible sections by type (zone, unit, poi)
+- List items show label or ref
+- Highlight selected item
+- Count badges per type
 
-  const handleMouseMove = (e) => {
-    if (isPanning) {
-      setTransform(prev => ({
-        ...prev,
-        x: e.clientX - panStart.x,
-        y: e.clientY - panStart.y,
-      }));
-    }
-  };
+### InspectorPanel (Right)
+- Empty state when nothing selected
+- Show overlay type badge
+- Reference ID (readonly)
+- Label (English) - editable
+- Label (Arabic) - editable, RTL
+- Label Position X/Y - editable
+- Changes trigger parent state update
 
-  const handleMouseUp = () => {
-    setIsPanning(false);
-  };
+## Data Flow
 
-  // Zoom with wheel
-  const handleWheel = (e) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    setTransform(prev => ({
-      ...prev,
-      scale: Math.min(Math.max(prev.scale * delta, 0.1), 10),
-    }));
-  };
-
-  return (
-    <div
-      style={{
-        width: '100%',
-        height: '100%',
-        background: '#e8e8e8',
-        overflow: 'hidden',
-        cursor: isPanning ? 'grabbing' : 'grab',
-      }}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-      onWheel={handleWheel}
-    >
-      <svg
-        ref={svgRef}
-        viewBox={viewBox}
-        style={{
-          width: '100%',
-          height: '100%',
-          transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
-          transformOrigin: 'center',
-        }}
-      >
-        {/* Background */}
-        <rect
-          x={vbX}
-          y={vbY}
-          width={vbW}
-          height={vbH}
-          fill="#f5f5f5"
-        />
-
-        {/* Overlays */}
-        {overlays.map((overlay) => {
-          const isSelected = overlay.id === selectedId;
-          const geometry = overlay.geometry;
-
-          if (geometry?.type === 'path') {
-            return (
-              <g key={overlay.id}>
-                <path
-                  d={geometry.d}
-                  fill={isSelected ? '#DAA520' : 'rgba(75, 156, 85, 0.5)'}
-                  fillOpacity={isSelected ? 0.5 : 0.7}
-                  stroke={isSelected ? '#F1DA9E' : '#fff'}
-                  strokeWidth={isSelected ? 2 : 1}
-                  style={{ cursor: 'pointer' }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelect(overlay);
-                  }}
-                />
-                {/* Label */}
-                {overlay.label_position && (
-                  <text
-                    x={overlay.label_position[0]}
-                    y={overlay.label_position[1]}
-                    textAnchor="middle"
-                    dominantBaseline="middle"
-                    fontSize="12"
-                    fill="#333"
-                    pointerEvents="none"
-                  >
-                    {overlay.label?.en || overlay.ref}
-                  </text>
-                )}
-              </g>
-            );
-          }
-
-          if (geometry?.type === 'point') {
-            return (
-              <circle
-                key={overlay.id}
-                cx={geometry.x}
-                cy={geometry.y}
-                r={10}
-                fill={isSelected ? '#DAA520' : '#1890ff'}
-                stroke="#fff"
-                strokeWidth={2}
-                style={{ cursor: 'pointer' }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSelect(overlay);
-                }}
-              />
-            );
-          }
-
-          return null;
-        })}
-      </svg>
-    </div>
-  );
-}
+```
+1. Page loads → fetch overlays from API
+2. User selects overlay → setSelectedOverlay
+3. User edits in inspector → handleOverlayUpdate (local state)
+4. hasChanges = true → Save button enabled
+5. User clicks Save → POST /overlays/bulk with changed overlays
+6. Success → invalidate query, hasChanges = false
 ```
 
-### Tools Panel
-```jsx
-// src/components/editor/ToolsPanel.jsx
-import React from 'react';
-import { Input, List, Tag, Typography, Collapse } from 'antd';
+## API Endpoints Used
 
-const { Search } = Input;
-const { Text } = Typography;
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /projects/:slug` | Get project + versions |
+| `GET /projects/:slug/versions/:v/overlays` | Get all overlays |
+| `GET /projects/:slug/versions/:v/config` | Get viewBox config |
+| `POST /projects/:slug/versions/:v/overlays/bulk` | Save changes |
 
-export default function ToolsPanel({ overlays, selectedId, onSelect }) {
-  const [search, setSearch] = React.useState('');
+## Canvas Interactions
 
-  const grouped = overlays.reduce((acc, o) => {
-    const type = o.overlay_type;
-    if (!acc[type]) acc[type] = [];
-    acc[type].push(o);
-    return acc;
-  }, {});
+| Interaction | Action |
+|-------------|--------|
+| Click background | Start panning |
+| Drag | Pan canvas |
+| Mouse wheel | Zoom in/out |
+| Click overlay | Select overlay |
+| Click selected | Keep selected |
 
-  const filterOverlays = (items) => {
-    if (!search) return items;
-    return items.filter(o =>
-      o.ref.toLowerCase().includes(search.toLowerCase()) ||
-      o.label?.en?.toLowerCase().includes(search.toLowerCase())
-    );
-  };
+## Overlay Rendering
 
-  return (
-    <div style={{ padding: 16 }}>
-      <Search
-        placeholder="Search overlays..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        style={{ marginBottom: 16 }}
-      />
+| Geometry Type | SVG Element |
+|---------------|-------------|
+| `path` | `<path d={geometry.d}>` |
+| `polygon` | `<polygon points={...}>` |
+| `point` | `<circle cx={x} cy={y} r={10}>` |
 
-      <Collapse defaultActiveKey={['zone', 'unit', 'poi']}>
-        {Object.entries(grouped).map(([type, items]) => (
-          <Collapse.Panel
-            key={type}
-            header={
-              <span>
-                {type.toUpperCase()}
-                <Tag style={{ marginLeft: 8 }}>{items.length}</Tag>
-              </span>
-            }
-          >
-            <List
-              size="small"
-              dataSource={filterOverlays(items)}
-              renderItem={(item) => (
-                <List.Item
-                  onClick={() => onSelect(item)}
-                  style={{
-                    cursor: 'pointer',
-                    background: item.id === selectedId ? '#e6f7ff' : undefined,
-                    padding: '8px 12px',
-                    marginBottom: 4,
-                    borderRadius: 4,
-                  }}
-                >
-                  <Text ellipsis style={{ maxWidth: 180 }}>
-                    {item.label?.en || item.ref}
-                  </Text>
-                </List.Item>
-              )}
-            />
-          </Collapse.Panel>
-        ))}
-      </Collapse>
-    </div>
-  );
-}
-```
+### Selection Styling
+- Normal: Status color fill, white stroke (1px)
+- Selected: Secondary color fill, accent stroke (2px)
 
-### Inspector Panel
-```jsx
-// src/components/editor/InspectorPanel.jsx
-import React from 'react';
-import { Form, Input, InputNumber, Typography, Divider, Empty, Tag } from 'antd';
+## State Management
 
-const { Title, Text } = Typography;
+Use React Query for server state:
+- `['project', slug]` - Project data
+- `['overlays', slug, version]` - Overlays list
+- `['config', slug, version]` - Config with viewBox
 
-export default function InspectorPanel({ overlay, onUpdate }) {
-  if (!overlay) {
-    return (
-      <div style={{ padding: 24 }}>
-        <Empty description="Select an overlay to edit" />
-      </div>
-    );
-  }
+Use local state for:
+- `overlays` - Working copy for edits
+- `selectedOverlay` - Currently selected
+- `hasChanges` - Dirty flag
+- `transform` - Canvas pan/zoom
 
-  return (
-    <div style={{ padding: 16 }}>
-      <Title level={5}>Properties</Title>
+## Save Logic
 
-      <div style={{ marginBottom: 16 }}>
-        <Tag color="blue">{overlay.overlay_type}</Tag>
-      </div>
-
-      <Form layout="vertical" size="small">
-        <Form.Item label="Reference ID">
-          <Input value={overlay.ref} disabled />
-        </Form.Item>
-
-        <Form.Item label="Label (English)">
-          <Input
-            value={overlay.label?.en || ''}
-            onChange={(e) =>
-              onUpdate({
-                label: { ...overlay.label, en: e.target.value },
-              })
-            }
-          />
-        </Form.Item>
-
-        <Form.Item label="Label (Arabic)">
-          <Input
-            value={overlay.label?.ar || ''}
-            dir="rtl"
-            onChange={(e) =>
-              onUpdate({
-                label: { ...overlay.label, ar: e.target.value },
-              })
-            }
-          />
-        </Form.Item>
-
-        <Divider>Label Position</Divider>
-
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Form.Item label="X" style={{ flex: 1 }}>
-            <InputNumber
-              value={overlay.label_position?.[0]}
-              style={{ width: '100%' }}
-              onChange={(val) =>
-                onUpdate({
-                  label_position: [val, overlay.label_position?.[1] || 0],
-                })
-              }
-            />
-          </Form.Item>
-          <Form.Item label="Y" style={{ flex: 1 }}>
-            <InputNumber
-              value={overlay.label_position?.[1]}
-              style={{ width: '100%' }}
-              onChange={(val) =>
-                onUpdate({
-                  label_position: [overlay.label_position?.[0] || 0, val],
-                })
-              }
-            />
-          </Form.Item>
-        </div>
-      </Form>
-    </div>
-  );
-}
+On save, filter only changed overlays by comparing with original data:
+```javascript
+const changedOverlays = overlays.filter(o => {
+  const original = originalData.find(orig => orig.id === o.id);
+  return JSON.stringify(o) !== JSON.stringify(original);
+});
 ```
 
 ## Acceptance Criteria
 
-- [ ] Canvas renders overlays correctly
-- [ ] Can pan and zoom canvas
-- [ ] Can select overlays
+- [ ] Canvas renders overlays from API
+- [ ] Can pan canvas by dragging
+- [ ] Can zoom canvas with mouse wheel
+- [ ] Click selects overlay
+- [ ] Tools panel lists overlays grouped by type
+- [ ] Search filters overlay list
 - [ ] Inspector shows selected overlay properties
-- [ ] Can edit label text
-- [ ] Can edit label position
-- [ ] Save updates overlays via API
+- [ ] Can edit label (en/ar) in inspector
+- [ ] Can edit label position in inspector
+- [ ] Save button enabled when changes exist
+- [ ] Save posts to bulk endpoint
+- [ ] Success toast on save

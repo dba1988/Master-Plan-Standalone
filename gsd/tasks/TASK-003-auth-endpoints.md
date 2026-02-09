@@ -20,7 +20,7 @@ Create authentication endpoints:
 ## Files to Create/Modify
 
 ```
-admin-api/app/
+admin-service/api/app/
 ├── core/
 │   └── security.py
 ├── schemas/

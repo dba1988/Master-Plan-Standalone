@@ -5,21 +5,23 @@
 
 ## Objective
 
-Set up the project scaffold, database schema, authentication, and basic project management.
+Set up both service scaffolds, database schema, authentication, and basic project management.
 
 ## Tasks
 
 | Task | Description | Status | Depends On |
 |------|-------------|--------|------------|
-| [TASK-001](../tasks/TASK-001-project-scaffold.md) | Project Scaffold | [ ] | - |
+| [TASK-001](../tasks/TASK-001-project-scaffold.md) | Admin Service Scaffold | [ ] | - |
+| [TASK-001b](../tasks/TASK-001b-public-service-scaffold.md) | Public Service Scaffold | [ ] | - |
 | [TASK-002](../tasks/TASK-002-database-schema.md) | Database Schema + Migrations | [ ] | TASK-001 |
 | [TASK-003](../tasks/TASK-003-auth-endpoints.md) | Auth Endpoints | [ ] | TASK-002 |
 | [TASK-004](../tasks/TASK-004-project-crud.md) | Project CRUD | [ ] | TASK-003 |
 
 ## Deliverables
 
-- [ ] Monorepo structure with all services
-- [ ] Docker Compose for local development
+- [ ] Admin service scaffold (API + UI)
+- [ ] Public service scaffold (API + Viewer)
+- [ ] Docker Compose for local development (all 4 services)
 - [ ] PostgreSQL database with migrations
 - [ ] JWT authentication working
 - [ ] Project CRUD endpoints functional
@@ -38,20 +40,37 @@ Set up the project scaffold, database schema, authentication, and basic project 
 │                         Phase 1 Scope                                   │
 └─────────────────────────────────────────────────────────────────────────┘
 
-    ┌─────────────────┐          ┌─────────────────┐
-    │   Admin API     │ ──────── │   PostgreSQL    │
-    │   (FastAPI)     │          │   (Database)    │
-    │   Port: 8000    │          │   Port: 5432    │
-    └─────────────────┘          └─────────────────┘
-           │
-           ├── POST /api/auth/login
-           ├── POST /api/auth/refresh
-           ├── GET  /api/auth/me
-           ├── GET  /api/projects
-           ├── POST /api/projects
-           ├── GET  /api/projects/{slug}
-           ├── PUT  /api/projects/{slug}
-           └── DELETE /api/projects/{slug}
+    ADMIN SERVICE                              PUBLIC SERVICE
+    ┌─────────────────┐                       ┌─────────────────┐
+    │   Admin API     │                       │   Public API    │
+    │   (FastAPI)     │                       │   (FastAPI)     │
+    │   Port: 8000    │                       │   Port: 8001    │
+    └────────┬────────┘                       └────────┬────────┘
+             │                                         │
+             │  ┌─────────────────┐                   │
+             └──│   PostgreSQL    │───────────────────┘
+                │   (Database)    │      (read-only)
+                │   Port: 5432    │
+                └─────────────────┘
+
+    ┌─────────────────┐                       ┌─────────────────┐
+    │   Admin UI      │                       │   Viewer        │
+    │   (React)       │                       │   (React)       │
+    │   Port: 3001    │                       │   Port: 3000    │
+    └─────────────────┘                       └─────────────────┘
+
+Admin API Endpoints (Phase 1):
+  ├── POST /api/auth/login
+  ├── POST /api/auth/refresh
+  ├── GET  /api/auth/me
+  ├── GET  /api/projects
+  ├── POST /api/projects
+  ├── GET  /api/projects/{slug}
+  ├── PUT  /api/projects/{slug}
+  └── DELETE /api/projects/{slug}
+
+Public API Endpoints (Phase 1 - scaffold only):
+  └── GET  /health
 ```
 
 ## Notes
