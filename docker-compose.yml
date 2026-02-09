@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: masterplan
+      POSTGRES_PASSWORD: masterplan_dev
+      POSTGRES_DB: masterplan
+    ports:
+      - "5433:5432"  # Use 5433 externally to avoid conflict with local PostgreSQL
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U masterplan"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ADMIN SERVICE
+  admin-api:
+    build: ./admin-service/api
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://masterplan:masterplan_dev@postgres:5432/masterplan
+      SECRET_KEY: dev-secret-key-change-in-production
+      CORS_ORIGINS: '["http://localhost:3001"]'
+      R2_ENDPOINT: http://minio:9000
+      R2_ACCESS_KEY_ID: minioadmin
+      R2_SECRET_ACCESS_KEY: minioadmin
+      R2_BUCKET: masterplan
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./admin-service/api:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  admin-ui:
+    build:
+      context: ./admin-service/ui
+      target: dev
+    ports:
+      - "3001:3001"
+    environment:
+      VITE_API_URL: http://localhost:8000
+    volumes:
+      - ./admin-service/ui:/app
+      - /app/node_modules
+
+  # PUBLIC SERVICE (defined in TASK-001b)
+  # public-api:
+  #   build: ./public-service/api
+  #   ports:
+  #     - "8001:8001"
+  #
+  # viewer:
+  #   build: ./public-service/viewer
+  #   ports:
+  #     - "3000:3000"
+
+  # MinIO for local R2 simulation
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+
+volumes:
+  postgres_data:
+  minio_data:

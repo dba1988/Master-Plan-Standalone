@@ -1,7 +1,7 @@
 # TASK-001: Admin Service Scaffold
 
 **Phase**: 1 - Foundation
-**Status**: [ ] Not Started
+**Status**: [x] Completed
 **Priority**: P0 - Critical
 **Depends On**: None
 **Blocks**: TASK-002, TASK-003, TASK-004
@@ -236,13 +236,13 @@ python -m uvicorn app.main:app --reload --port 8000
 
 ## Acceptance Criteria
 
-- [ ] `admin-service/api/` directory created with correct structure
-- [ ] `admin-service/ui/` directory created with correct structure
-- [ ] `docker-compose up` starts PostgreSQL + MinIO
-- [ ] Admin API starts and shows Swagger docs at /docs (port 8000)
-- [ ] Admin UI starts on port 3001
-- [ ] Git repository initialized with .gitignore
-- [ ] **No public-service code** (that's TASK-001b)
+- [x] `admin-service/api/` directory created with correct structure
+- [x] `admin-service/ui/` directory created with correct structure
+- [x] `docker-compose up` starts PostgreSQL + MinIO
+- [x] Admin API starts and shows Swagger docs at /docs (port 8000)
+- [x] Admin UI starts on port 3001
+- [x] Git repository initialized with .gitignore
+- [x] **No public-service code** (that's TASK-001b)
 
 ## Notes
 
