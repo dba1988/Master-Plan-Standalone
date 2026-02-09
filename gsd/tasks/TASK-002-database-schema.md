@@ -1,7 +1,7 @@
 # TASK-002: Database Schema + Migrations
 
 **Phase**: 1 - Foundation
-**Status**: [ ] Not Started
+**Status**: [x] Completed
 **Priority**: P0 - Critical
 **Depends On**: TASK-001
 
@@ -225,12 +225,12 @@ if __name__ == "__main__":
 
 ## Acceptance Criteria
 
-- [ ] All models defined with correct relationships
-- [ ] Migration runs successfully
-- [ ] Tables created in PostgreSQL
-- [ ] Indexes created for query performance
-- [ ] Seed script creates dev user
-- [ ] Can connect to DB from FastAPI
+- [x] All models defined with correct relationships
+- [x] Migration runs successfully
+- [x] Tables created in PostgreSQL
+- [x] Indexes created for query performance
+- [x] Seed script creates dev user
+- [x] Can connect to DB from FastAPI
 
 ## Notes
 
