@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.lib.config import settings
 from app.features.health.routes import router as health_router
+from app.features.auth.routes import router as auth_router
 
 app = FastAPI(
     title="Master Plan Admin API",
@@ -20,6 +21,7 @@ app.add_middleware(
 )
 
 app.include_router(health_router, prefix="/api", tags=["Health"])
+app.include_router(auth_router, prefix="/api", tags=["Authentication"])
 
 
 @app.get("/")

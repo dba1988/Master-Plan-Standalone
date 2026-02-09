@@ -1,7 +1,7 @@
 # TASK-003: Auth Endpoints
 
 **Phase**: 1 - Foundation
-**Status**: [ ] Not Started
+**Status**: [x] Completed
 **Priority**: P0 - Critical
 **Depends On**: TASK-002
 
@@ -322,14 +322,14 @@ def require_role(allowed_roles: list[str]):
 
 ## Acceptance Criteria
 
-- [ ] Can login with valid credentials
-- [ ] Returns JWT access token (15 min expiry)
-- [ ] Returns refresh token (7 day expiry)
-- [ ] Can refresh access token
-- [ ] Refresh token rotates on use
-- [ ] Can logout (revokes refresh token)
-- [ ] Protected routes reject invalid tokens
-- [ ] Password hashed with bcrypt
+- [x] Can login with valid credentials
+- [x] Returns JWT access token (15 min expiry)
+- [x] Returns refresh token (7 day expiry)
+- [x] Can refresh access token
+- [x] Refresh token rotates on use
+- [x] Can logout (revokes refresh token)
+- [x] Protected routes reject invalid tokens
+- [x] Password hashed with bcrypt
 
 ## Security Notes
 

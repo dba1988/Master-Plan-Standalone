@@ -13,8 +13,10 @@ class Settings(BaseSettings):
 
     # Auth
     secret_key: str = Field(default="dev-secret-key", env="SECRET_KEY")
-    jwt_expire_minutes: int = Field(default=60, env="JWT_EXPIRE_MINUTES")
+    jwt_expire_minutes: int = Field(default=15, env="JWT_EXPIRE_MINUTES")
     jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = Field(default=15, env="ACCESS_TOKEN_EXPIRE_MINUTES")
+    refresh_token_expire_days: int = Field(default=7, env="REFRESH_TOKEN_EXPIRE_DAYS")
 
     # CORS
     cors_origins_str: str = Field(
