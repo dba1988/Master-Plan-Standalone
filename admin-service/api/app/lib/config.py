@@ -28,11 +28,20 @@ class Settings(BaseSettings):
     def cors_origins(self) -> List[str]:
         return json.loads(self.cors_origins_str)
 
-    # R2 Storage
+    # R2/S3 Storage (MinIO locally, R2 in production)
     r2_endpoint: str = Field(default="http://localhost:9000", env="R2_ENDPOINT")
     r2_access_key_id: str = Field(default="minioadmin", env="R2_ACCESS_KEY_ID")
     r2_secret_access_key: str = Field(default="minioadmin", env="R2_SECRET_ACCESS_KEY")
     r2_bucket: str = Field(default="masterplan", env="R2_BUCKET")
+    r2_region: str = Field(default="us-east-1", env="R2_REGION")
+
+    # CDN (optional, for production)
+    cdn_base_url: str = Field(default="", env="CDN_BASE_URL")
+    cdn_hmac_secret: str = Field(default="dev-hmac-secret", env="CDN_HMAC_SECRET")
+
+    @property
+    def use_cdn(self) -> bool:
+        return bool(self.cdn_base_url)
 
     class Config:
         env_file = ".env"

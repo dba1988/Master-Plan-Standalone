@@ -1,7 +1,7 @@
 # TASK-005: Storage Service
 
 **Phase**: 2 - Storage + Assets
-**Status**: [ ] Not Started
+**Status**: [x] Completed
 **Priority**: P0 - Critical
 **Depends On**: TASK-027 (R2 storage adapter)
 **Blocks**: TASK-006 (asset upload), TASK-010a (tile generation)
@@ -82,11 +82,11 @@ async def get_storage() -> StorageService:
 
 ## Acceptance Criteria
 
-- [ ] Storage paths follow `mp/{project}/uploads/{type}/` pattern
-- [ ] Release paths follow `mp/{project}/releases/{id}/` pattern
-- [ ] Presigned upload URLs work with R2
-- [ ] Download URLs use CDN for public assets
-- [ ] File metadata retrieved after upload confirmation
-- [ ] Files can be copied to release folder
-- [ ] Files can be listed by prefix
-- [ ] Files can be deleted
+- [x] Storage paths follow `mp/{project}/uploads/{type}/` pattern
+- [x] Release paths follow `mp/{project}/releases/{id}/` pattern
+- [x] Presigned upload URLs work with R2
+- [x] Download URLs use CDN for public assets
+- [x] File metadata retrieved after upload confirmation
+- [x] Files can be copied to release folder
+- [x] Files can be listed by prefix
+- [x] Files can be deleted

@@ -1,7 +1,7 @@
 # TASK-027: R2 Storage Adapter
 
 **Phase**: 2 - Storage + Assets
-**Status**: [ ] Not Started
+**Status**: [x] Completed
 **Priority**: P0 - Critical
 **Depends On**: TASK-001 (project scaffold)
 **Blocks**: TASK-005 (storage service), TASK-006 (asset upload)
@@ -334,12 +334,12 @@ async def test_presigned_upload_url():
 
 ## Acceptance Criteria
 
-- [ ] R2 client initializes with env vars
-- [ ] File upload works (public and secure)
-- [ ] Presigned upload URLs generate correctly
-- [ ] Signed download URLs validate on CDN worker
-- [ ] File delete works
-- [ ] File existence check works
-- [ ] File copy works (for publish)
-- [ ] List files with prefix works
-- [ ] No CarJom-specific naming in code
+- [x] R2 client initializes with env vars
+- [x] File upload works (public and secure)
+- [x] Presigned upload URLs generate correctly
+- [x] Signed download URLs validate on CDN worker
+- [x] File delete works
+- [x] File existence check works
+- [x] File copy works (for publish)
+- [x] List files with prefix works
+- [x] No CarJom-specific naming in code
