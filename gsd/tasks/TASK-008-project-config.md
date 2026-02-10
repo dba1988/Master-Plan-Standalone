@@ -1,7 +1,7 @@
 # TASK-008: Project Config Endpoints
 
 **Phase**: 3 - Overlays + Config
-**Status**: [ ] Not Started
+**Status**: [x] Completed
 **Priority**: P0 - Critical
 **Depends On**: TASK-004, TASK-000 (parity harness for status styles)
 
@@ -283,8 +283,8 @@ async def update_config(
 
 ## Acceptance Criteria
 
-- [ ] Can get config (creates default if missing)
-- [ ] Can update config
-- [ ] Default styles match ROSHN production
-- [ ] Only draft versions can be modified
-- [ ] Config stored as JSONB fields
+- [x] Can get config (creates default if missing)
+- [x] Can update config
+- [x] Default styles match ROSHN production
+- [x] Only draft versions can be modified
+- [x] Config stored as JSONB fields
