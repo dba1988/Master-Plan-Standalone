@@ -49,16 +49,36 @@ services:
       - ./admin-service/ui:/app
       - /app/node_modules
 
-  # PUBLIC SERVICE (defined in TASK-001b)
-  # public-api:
-  #   build: ./public-service/api
-  #   ports:
-  #     - "8001:8001"
-  #
-  # viewer:
-  #   build: ./public-service/viewer
-  #   ports:
-  #     - "3000:3000"
+  # PUBLIC SERVICE (Node.js + TypeScript)
+  public-api:
+    build:
+      context: ./public-service/api
+      target: dev
+    ports:
+      - "8001:8001"
+    environment:
+      DATABASE_URL: postgres://masterplan:masterplan_dev@postgres:5432/masterplan
+      CDN_BASE_URL: http://localhost:9000
+      DEBUG: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./public-service/api:/app
+      - /app/node_modules
+
+  viewer:
+    build:
+      context: ./public-service/viewer
+      target: dev
+    ports:
+      - "3000:3000"
+    environment:
+      VITE_PUBLIC_API_URL: http://localhost:8001
+      VITE_CDN_BASE_URL: http://localhost:9000
+    volumes:
+      - ./public-service/viewer:/app
+      - /app/node_modules
 
   # MinIO for local R2 simulation
   minio:

@@ -11,24 +11,30 @@
 
 Create a public, unauthenticated endpoint in **public-service** that redirects to the immutable `release.json` on CDN.
 
+## Tech Stack
+
+| Component | Technology | Notes |
+|-----------|------------|-------|
+| Runtime | Node.js 20 + TypeScript | Fastify for HTTP |
+| Database | PostgreSQL (read-only) | pg + raw SQL |
+
 ## Service Separation Rules
 
 > **CRITICAL**: This endpoint lives in `public-service/api/`, NOT in `admin-service/`.
 
 - Public service has **read-only** database access
 - Use **raw SQL queries** - do NOT import ORM models from admin-service
-- Imports use `app.lib.*` and `app.features.*` paths
+- Imports use relative paths within public-service
 
 ## Files to Create
 
 ```
-public-service/api/app/
+public-service/api/src/
 ├── features/release/
-│   ├── __init__.py
-│   ├── routes.py        # GET /{project}/release.json, GET /{project}/release-info
-│   └── types.py         # Release types (if needed)
+│   ├── routes.ts       # GET /{project}/release.json, GET /{project}/release-info
+│   └── types.ts        # Release types
 └── lib/
-    └── config.py        # CDN_BASE_URL setting
+    └── config.ts       # CDN_BASE_URL setting
 ```
 
 ## Architecture: Redirect Strategy
@@ -51,9 +57,85 @@ CDN: Cache-Control: public, max-age=31536000, immutable
 
 **Key insight**: The API redirect is NOT cached (fresh lookup), but CDN content is cached forever.
 
+## Implementation
+
+```typescript
+// public-service/api/src/features/release/routes.ts
+import { FastifyPluginAsync } from 'fastify';
+import { query } from '../../lib/database.js';
+import { config } from '../../lib/config.js';
+
+interface Project {
+  current_release_id: string | null;
+}
+
+export const releaseRoutes: FastifyPluginAsync = async (app) => {
+  // GET /api/releases/:slug/current -> 307 redirect to CDN
+  app.get('/:slug/current', async (request, reply) => {
+    const { slug } = request.params as { slug: string };
+
+    const projects = await query<Project>(
+      'SELECT current_release_id FROM projects WHERE slug = $1 AND is_active = true',
+      [slug]
+    );
+
+    if (projects.length === 0) {
+      return reply.status(404).send({
+        error: 'Project not found or inactive',
+      });
+    }
+
+    const releaseId = projects[0].current_release_id;
+    if (!releaseId) {
+      return reply.status(404).send({
+        error: 'No published version available',
+      });
+    }
+
+    const cdnUrl = `${config.cdnBaseUrl}/public/mp/${slug}/releases/${releaseId}/release.json`;
+
+    reply.header('Cache-Control', 'no-cache');
+    reply.header('X-Release-Id', releaseId);
+
+    return reply.redirect(307, cdnUrl);
+  });
+
+  // GET /api/releases/:slug/info -> release metadata without redirect
+  app.get('/:slug/info', async (request, reply) => {
+    const { slug } = request.params as { slug: string };
+
+    const projects = await query<Project>(
+      'SELECT current_release_id FROM projects WHERE slug = $1 AND is_active = true',
+      [slug]
+    );
+
+    if (projects.length === 0) {
+      return reply.status(404).send({
+        error: 'Project not found or inactive',
+      });
+    }
+
+    const releaseId = projects[0].current_release_id;
+    if (!releaseId) {
+      return reply.status(404).send({
+        error: 'No published version available',
+      });
+    }
+
+    reply.header('Cache-Control', 'no-cache');
+
+    return {
+      release_id: releaseId,
+      cdn_url: `${config.cdnBaseUrl}/public/mp/${slug}/releases/${releaseId}/release.json`,
+      tiles_base: `${config.cdnBaseUrl}/public/mp/${slug}/releases/${releaseId}/tiles`,
+    };
+  });
+};
+```
+
 ## API Contract
 
-### GET /api/public/{project}/release.json
+### GET /api/releases/{project}/current
 
 Redirects to immutable CDN URL for current release.
 
@@ -68,7 +150,7 @@ Redirects to immutable CDN URL for current release.
 - 404 if project not found or inactive
 - 404 if no published version exists (message: "No published version available")
 
-### GET /api/public/{project}/release-info
+### GET /api/releases/{project}/info
 
 Returns release metadata without redirect. Useful for clients that need release ID before fetching.
 
@@ -88,11 +170,17 @@ Returns release metadata without redirect. Useful for clients that need release 
 
 Use raw SQL to lookup current release. Do NOT import ORM models.
 
-**Example: Get current release ID**
-```sql
-SELECT current_release_id
-FROM projects
-WHERE slug = :slug AND is_active = true
+```typescript
+import { query } from '../../lib/database.js';
+
+interface Project {
+  current_release_id: string | null;
+}
+
+const projects = await query<Project>(
+  'SELECT current_release_id FROM projects WHERE slug = $1 AND is_active = true',
+  [slug]
+);
 ```
 
 ## CDN Path Convention
@@ -107,25 +195,26 @@ Canonical path for immutable release artifacts:
 
 | Path | Cache-Control | Reason |
 |------|---------------|--------|
-| `/api/public/{project}/release.json` | `no-cache` | Redirect always fresh |
+| `/api/releases/{project}/current` | `no-cache` | Redirect always fresh |
 | CDN: `/.../releases/{id}/release.json` | `immutable, max-age=31536000` | Immutable content |
 | CDN: `/.../releases/{id}/tiles/*` | `immutable, max-age=31536000` | Immutable content |
 
 ## CORS Configuration
 
 Public endpoints allow any origin:
-- `allow_origins: ["*"]`
-- `allow_credentials: false`
-- `allow_methods: ["GET", "HEAD", "OPTIONS"]`
+- `origin: '*'`
+- `credentials: false`
+- `methods: ['GET', 'HEAD', 'OPTIONS']`
 
 ## Acceptance Criteria
 
-- [ ] `GET /api/public/{project}/release.json` returns 307 redirect to CDN
+- [ ] `GET /api/releases/{project}/current` returns 307 redirect to CDN
 - [ ] Redirect URL contains current_release_id
 - [ ] `X-Release-Id` header included in response
 - [ ] Redirect has `Cache-Control: no-cache` (fresh lookup each time)
 - [ ] Returns 404 for inactive projects
 - [ ] Returns 404 when no published version exists
-- [ ] `GET /api/public/{project}/release-info` returns metadata JSON
+- [ ] `GET /api/releases/{project}/info` returns metadata JSON
 - [ ] CORS allows any origin for GET requests
 - [ ] Uses raw SQL queries (no shared ORM models)
+- [ ] TypeScript compiles without errors

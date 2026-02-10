@@ -11,6 +11,16 @@
 
 Create a public API endpoint in **public-service** that proxies client status data and streams updates via SSE.
 
+## Tech Stack
+
+| Component | Technology | Notes |
+|-----------|------------|-------|
+| Runtime | Node.js 20 + TypeScript | Fastify for HTTP |
+| SSE | @fastify/sse or native | Real-time streaming |
+| Database | PostgreSQL (read-only) | pg + raw SQL |
+| HTTP Client | undici | For external API calls |
+| Cache | In-memory Map | 30-second TTL |
+
 ## Service Separation Rules
 
 > **CRITICAL**: This endpoint lives in `public-service/api/`, NOT in `admin-service/`.
@@ -18,21 +28,20 @@ Create a public API endpoint in **public-service** that proxies client status da
 - Public service has **read-only** database access
 - Use **raw SQL queries** - do NOT import ORM models from admin-service
 - Calls external client APIs to fetch live status data
-- Imports use `app.lib.*` and `app.features.*` paths (NOT `app.core.*` or `app.models`)
+- Imports use relative paths within public-service
 
 ## Files to Create
 
 ```
-public-service/api/app/
+public-service/api/src/
 ├── features/status/
-│   ├── __init__.py
-│   ├── routes.py        # GET /status, GET /status/stream, POST /status/refresh
-│   ├── service.py       # StatusProxyService class
-│   └── types.py         # Status types
+│   ├── routes.ts       # GET /status, GET /status/stream, POST /status/refresh
+│   ├── service.ts      # StatusProxyService class
+│   └── types.ts        # Status types
 ├── lib/
-│   └── sse.py           # SSE utilities (own copy, not shared)
+│   └── sse.ts          # SSE utilities
 └── infra/
-    └── client_api.py    # External client API client
+    └── client-api.ts   # External client API client
 ```
 
 ## API Contract
@@ -62,6 +71,39 @@ Returns current unit statuses for a project.
 ### GET /api/public/{slug}/status/stream
 
 SSE stream for real-time status updates.
+
+**Implementation:**
+```typescript
+// public-service/api/src/features/status/routes.ts
+import { FastifyPluginAsync } from 'fastify';
+
+export const statusRoutes: FastifyPluginAsync = async (app) => {
+  app.get('/:slug/stream', async (request, reply) => {
+    const { slug } = request.params as { slug: string };
+
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-store',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+
+    // Send initial connection event
+    reply.raw.write(`event: connected\ndata: ${JSON.stringify({ project: slug })}\n\n`);
+
+    // Set up polling and broadcasting
+    const interval = setInterval(async () => {
+      const statuses = await statusService.getStatuses(slug);
+      reply.raw.write(`event: status_update\ndata: ${JSON.stringify({ statuses })}\n\n`);
+    }, 5000);
+
+    // Cleanup on disconnect
+    request.raw.on('close', () => {
+      clearInterval(interval);
+    });
+  });
+};
+```
 
 **SSE Events:**
 ```
@@ -112,34 +154,108 @@ Client APIs return various status values. Normalize to 5-status taxonomy:
 
 ## Database Access (Raw SQL)
 
-Public service queries the shared database read-only. Use raw SQL, not ORM models.
+Public service queries the shared database read-only. Use raw SQL via pg.
 
 **Example: Check project exists**
-```sql
-SELECT 1 FROM projects WHERE slug = :slug AND is_active = true LIMIT 1
+```typescript
+const result = await query<{ exists: boolean }>(
+  'SELECT EXISTS(SELECT 1 FROM projects WHERE slug = $1 AND is_active = true)',
+  [slug]
+);
 ```
 
 **Example: Get integration config**
-```sql
-SELECT ic.api_base_url, ic.status_endpoint, ic.auth_type,
-       ic.auth_credentials, ic.timeout_seconds, ic.status_mapping
-FROM integration_configs ic
-JOIN projects p ON ic.project_id = p.id
-WHERE p.slug = :slug AND p.is_active = true
+```typescript
+const configs = await query<IntegrationConfig>(
+  `SELECT ic.api_base_url, ic.status_endpoint, ic.auth_type,
+          ic.auth_credentials, ic.timeout_seconds, ic.status_mapping
+   FROM integration_configs ic
+   JOIN projects p ON ic.project_id = p.id
+   WHERE p.slug = $1 AND p.is_active = true`,
+  [slug]
+);
 ```
 
-## SSE Message Format
+## Service Implementation
 
-SSE messages follow standard format with optional fields:
+```typescript
+// public-service/api/src/features/status/service.ts
+import { query } from '../../lib/database.js';
+import { clientApi } from '../../infra/client-api.js';
 
+interface StatusCache {
+  statuses: Record<string, string>;
+  timestamp: number;
+}
+
+const CACHE_TTL = 30000; // 30 seconds
+const cache = new Map<string, StatusCache>();
+
+export class StatusProxyService {
+  async getStatuses(slug: string): Promise<Record<string, string>> {
+    // Check cache
+    const cached = cache.get(slug);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      return cached.statuses;
+    }
+
+    // Fetch from external API
+    try {
+      const config = await this.getIntegrationConfig(slug);
+      if (!config) {
+        return cached?.statuses || {};
+      }
+
+      const statuses = await clientApi.fetchStatuses(config);
+      const normalized = this.normalizeStatuses(statuses, config.status_mapping);
+
+      // Update cache
+      cache.set(slug, { statuses: normalized, timestamp: Date.now() });
+      return normalized;
+    } catch (error) {
+      // Return stale cache on error
+      return cached?.statuses || {};
+    }
+  }
+
+  private normalizeStatuses(
+    raw: Record<string, string>,
+    mapping: Record<string, string[]>
+  ): Record<string, string> {
+    const result: Record<string, string> = {};
+
+    for (const [id, status] of Object.entries(raw)) {
+      const normalized = this.normalizeStatus(status.toLowerCase(), mapping);
+      result[id] = normalized;
+    }
+
+    return result;
+  }
+
+  private normalizeStatus(status: string, mapping: Record<string, string[]>): string {
+    for (const [canonical, variants] of Object.entries(mapping)) {
+      if (variants.includes(status)) {
+        return canonical;
+      }
+    }
+    return 'available'; // Default fallback
+  }
+
+  private async getIntegrationConfig(slug: string) {
+    const configs = await query<IntegrationConfig>(
+      `SELECT api_base_url, status_endpoint, auth_type,
+              auth_credentials, timeout_seconds, status_mapping
+       FROM integration_configs ic
+       JOIN projects p ON ic.project_id = p.id
+       WHERE p.slug = $1 AND p.is_active = true`,
+      [slug]
+    );
+    return configs[0] || null;
+  }
+}
+
+export const statusService = new StatusProxyService();
 ```
-id: <message_id>
-event: <event_type>
-retry: <reconnect_ms>
-data: <json_payload>
-
-```
-(blank line terminates message)
 
 ## Behavior Requirements
 
@@ -182,3 +298,4 @@ Support three auth types (read from `integration_configs.auth_credentials`):
 - [ ] Status mapping uses 5-status taxonomy
 - [ ] Polling starts/stops based on subscriber count
 - [ ] Uses raw SQL queries (no shared ORM models)
+- [ ] TypeScript compiles without errors

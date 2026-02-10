@@ -1,0 +1,71 @@
+/* Global styles for Master Plan viewer */
+
+:root {
+  /* Status colors */
+  --color-status-available: #22c55e;
+  --color-status-reserved: #eab308;
+  --color-status-sold: #ef4444;
+  --color-status-hidden: #6b7280;
+  --color-status-unreleased: #3b82f6;
+
+  /* UI colors */
+  --color-background: #ffffff;
+  --color-surface: #f9fafb;
+  --color-border: #e5e7eb;
+  --color-text-primary: #111827;
+  --color-text-secondary: #6b7280;
+  --color-text-muted: #9ca3af;
+
+  /* Spacing */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+}
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-background);
+}
+
+.app-header {
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+}
+
+.app-header h1 {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.app-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-lg);
+}
+
+.status-container {
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+.status-container p {
+  margin-bottom: var(--spacing-sm);
+}
+
+.status-container .hint {
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+
+.status-error {
+  text-align: center;
+  color: var(--color-status-sold);
+}

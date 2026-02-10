@@ -8,29 +8,43 @@
 
 ## Objective
 
-Create the standalone map viewer with OpenSeadragon and React. This is a lightweight, public-facing SPA that displays interactive master plan maps.
+Create the standalone map viewer with OpenSeadragon and React + TypeScript. This is a lightweight, public-facing SPA that displays interactive master plan maps.
+
+## Tech Stack
+
+| Component | Technology | Notes |
+|-----------|------------|-------|
+| Framework | React 18 + TypeScript | Strict mode |
+| Build | Vite 5 | Fast dev/build |
+| Viewer | OpenSeadragon 4.x | Deep zoom |
+| Styling | CSS Variables | From design tokens |
 
 ## Project Structure
 
 ```
 public-service/viewer/
 ├── package.json
-├── vite.config.js
+├── tsconfig.json
+├── vite.config.ts
 ├── index.html
 ├── public/
 │   └── .gitkeep
 └── src/
-    ├── main.jsx
-    ├── App.jsx
+    ├── main.tsx
+    ├── App.tsx
     ├── index.css
+    ├── vite-env.d.ts
     ├── config/
-    │   └── environment.js
+    │   └── environment.ts
     ├── components/
-    │   ├── MasterPlanViewer.jsx
-    │   ├── OverlayRenderer.jsx
-    │   └── UnitShape.jsx
-    └── theme/
-        └── theme.js            # Import from @masterplan/theme
+    │   ├── MasterPlanViewer.tsx
+    │   ├── OverlayRenderer.tsx
+    │   └── UnitShape.tsx
+    ├── lib/
+    │   └── api-client.ts
+    └── styles/
+        ├── tokens.ts
+        └── globals.css
 ```
 
 ## Dependencies
@@ -40,13 +54,41 @@ public-service/viewer/
   "dependencies": {
     "openseadragon": "^4.1.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "@masterplan/theme": "workspace:*"
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
     "@vitejs/plugin-react": "^4.2.1",
+    "typescript": "^5.3.0",
     "vite": "^5.0.8"
   }
+}
+```
+
+## TypeScript Configuration
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["src"],
+  "references": [{ "path": "./tsconfig.node.json" }]
 }
 ```
 
@@ -72,26 +114,32 @@ Viewer extracts project slug from URL:
 
 ### Startup Flow
 1. Extract project slug from URL
-2. Fetch `GET /api/public/{slug}/release.json` (TASK-026)
+2. Fetch `GET /api/releases/{slug}/current` (TASK-026)
 3. API returns 307 redirect to CDN
 4. Load release.json from CDN
 5. Initialize OpenSeadragon with base_map URL
 6. Render overlays from release data
 
 ### Release JSON Shape
-```json
-{
-  "release_id": "rel_20240115_abc123",
-  "base_map": "base-4096.jpg",
-  "default_view_box": "0 0 4096 4096",
-  "overlays": [
-    {
-      "ref": "A101",
-      "overlay_type": "unit",
-      "geometry": { "type": "polygon", "points": [[x,y], ...] },
-      "label": { "en": "Unit A101", "ar": "وحدة A101" }
-    }
-  ]
+```typescript
+interface Release {
+  release_id: string;
+  base_map: string;
+  default_view_box: string;
+  overlays: Overlay[];
+}
+
+interface Overlay {
+  ref: string;
+  overlay_type: 'unit' | 'zone' | 'amenity';
+  geometry: {
+    type: 'polygon';
+    points: [number, number][];
+  };
+  label: {
+    en: string;
+    ar?: string;
+  };
 }
 ```
 
@@ -119,49 +167,122 @@ Overlays render in an SVG element that transforms with the viewport:
 4. SVG has `pointer-events: none` on container, `pointer-events: auto` on shapes
 
 ### Transform Calculation
-```
-SVG transform = translate(imageRect.x, imageRect.y) scale(imageRect.width / viewBoxWidth)
+```typescript
+const imageRect = viewer.viewport.viewportToViewerElementRectangle(
+  viewer.viewport.imageToViewportRectangle(new OpenSeadragon.Rect(0, 0, imageWidth, imageHeight))
+);
+
+const transform = `translate(${imageRect.x}px, ${imageRect.y}px) scale(${imageRect.width / viewBoxWidth})`;
 ```
 
 This keeps overlay coordinates stable regardless of zoom/pan.
 
 ## Component Responsibilities
 
-### App.jsx
+### App.tsx
 - URL parsing for project slug
 - Data fetching orchestration
 - Loading/error states
 - Pass release data to viewer
 
-### MasterPlanViewer.jsx
+```typescript
+// public-service/viewer/src/App.tsx
+import { useState, useEffect } from 'react';
+import { MasterPlanViewer } from './components/MasterPlanViewer';
+import { api } from './lib/api-client';
+import type { Release } from './types';
+
+function App() {
+  const [release, setRelease] = useState<Release | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const slug = getProjectSlug();
+    loadRelease(slug);
+  }, []);
+
+  const loadRelease = async (slug: string) => {
+    try {
+      const data = await api.getCurrentRelease(slug);
+      setRelease(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) return <LoadingSpinner />;
+  if (error) return <ErrorState message={error} onRetry={() => loadRelease(getProjectSlug())} />;
+  if (!release) return null;
+
+  return <MasterPlanViewer release={release} />;
+}
+```
+
+### MasterPlanViewer.tsx
 - Initialize OpenSeadragon instance
 - Create and manage SVG overlay container
 - Track viewport changes
 - Handle selection state
 - Locale toggle
 
-### OverlayRenderer.jsx
+### OverlayRenderer.tsx
 - Render overlay shapes from release data
 - Apply status-based styling (from theme)
 - Handle hover/click interactions
 - Filter visibility based on status
 
-### UnitShape.jsx
+### UnitShape.tsx
 - Render individual polygon/path
 - Apply fill/stroke from status
 - Handle mouse events
 - Animate transitions (300ms)
 
+## API Client
+
+```typescript
+// public-service/viewer/src/lib/api-client.ts
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001';
+
+export const api = {
+  getCurrentRelease: async (slug: string): Promise<Release> => {
+    const res = await fetch(`${API_BASE}/api/releases/${slug}/current`);
+    if (!res.ok) throw new Error('Failed to load release');
+    return res.json();
+  },
+
+  getStatuses: async (slug: string): Promise<Record<string, string>> => {
+    const res = await fetch(`${API_BASE}/api/status/${slug}`);
+    if (!res.ok) throw new Error('Failed to load statuses');
+    const data = await res.json();
+    return data.statuses;
+  },
+
+  subscribeToStatus: (slug: string, onUpdate: (statuses: Record<string, string>) => void) => {
+    const eventSource = new EventSource(`${API_BASE}/api/status/${slug}/stream`);
+
+    eventSource.addEventListener('status_update', (e) => {
+      const data = JSON.parse(e.data);
+      onUpdate(data.statuses);
+    });
+
+    return () => eventSource.close();
+  },
+};
+```
+
 ## Styling
 
-Use `@masterplan/theme` for all styling:
-- Status colors via `useStatusStyle` hook
+Use design tokens for all styling:
+- Status colors from tokens
 - Typography from tokens
 - No hardcoded colors
 
 Import CSS variables:
 ```css
-@import '@masterplan/theme/css';
+@import './styles/globals.css';
 ```
 
 ## UI Elements
@@ -188,7 +309,7 @@ Import CSS variables:
 
 ## Acceptance Criteria
 
-- [ ] Project scaffolded with Vite + React
+- [ ] Project scaffolded with Vite + React + TypeScript
 - [ ] OpenSeadragon initializes and loads base map from CDN
 - [ ] SVG overlay container created and transforms with viewport
 - [ ] Overlays render with correct status colors
@@ -196,5 +317,6 @@ Import CSS variables:
 - [ ] Click selects overlay and shows panel
 - [ ] Locale toggle switches labels
 - [ ] Loading and error states shown
-- [ ] Theme imported from `@masterplan/theme`
+- [ ] Design tokens used from own copy (not shared)
 - [ ] Dev server proxies to public-api on port 8001
+- [ ] TypeScript compiles with strict mode

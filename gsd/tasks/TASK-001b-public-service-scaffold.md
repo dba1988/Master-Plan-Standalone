@@ -1,22 +1,33 @@
 # TASK-001b: Public Service Scaffold
 
 **Phase**: 1 - Foundation
-**Status**: [ ] Not Started
+**Status**: [x] Completed
 **Priority**: P0 - Critical
 **Depends On**: None
 **Blocks**: TASK-023, TASK-026, TASK-020
 
 ## Objective
 
-Set up the public-service directory structure with public API (FastAPI) and viewer (React) scaffolds.
+Set up the public-service directory structure with public API (Node.js/TypeScript) and viewer (React) scaffolds.
 
 ## Description
 
 Create the foundational structure for the **public-service**, which is completely separate from admin-service:
-- Public API (FastAPI - lightweight, read-only)
+- Public API (Node.js + TypeScript + Fastify - lightweight, read-only)
 - Map Viewer (React + Vite + OpenSeadragon)
 - Separate Docker configurations
 - No shared code with admin-service
+
+## Tech Stack
+
+| Component | Technology | Notes |
+|-----------|------------|-------|
+| Public API | Node.js 20 + TypeScript | Fastify for performance |
+| Runtime | tsx / ts-node | Dev with hot reload |
+| Database | PostgreSQL (read-only) | pg + Kysely for type-safe queries |
+| SSE | Native Node.js / fastify-sse-v2 | Real-time status updates |
+| HTTP Client | undici / fetch | For external API calls |
+| Viewer | React 18 + Vite + TypeScript | OpenSeadragon for deep zoom |
 
 ## Files to Create
 
@@ -24,47 +35,44 @@ Create the foundational structure for the **public-service**, which is completel
 public-service/
 ├── api/
 │   ├── Dockerfile
-│   ├── requirements.txt
+│   ├── package.json
+│   ├── tsconfig.json
 │   ├── .env.example
-│   └── app/
-│       ├── __init__.py
-│       ├── main.py
+│   └── src/
+│       ├── index.ts
+│       ├── app.ts
 │       ├── lib/
-│       │   ├── __init__.py
-│       │   ├── config.py
-│       │   ├── database.py      # Read-only connection
-│       │   └── sse.py           # SSE utilities (own copy)
+│       │   ├── config.ts
+│       │   ├── database.ts       # Read-only connection
+│       │   └── sse.ts            # SSE utilities
 │       ├── infra/
-│       │   ├── __init__.py
-│       │   └── client_api.py    # External client API client
+│       │   └── client-api.ts     # External client API client
 │       └── features/
-│           ├── __init__.py
 │           ├── health/
-│           │   └── routes.py
+│           │   └── routes.ts
 │           ├── release/
-│           │   ├── __init__.py
-│           │   ├── routes.py
-│           │   └── types.py
+│           │   ├── routes.ts
+│           │   └── types.ts
 │           └── status/
-│               ├── __init__.py
-│               ├── routes.py
-│               ├── service.py
-│               └── types.py
+│               ├── routes.ts
+│               ├── service.ts
+│               └── types.ts
 │
 └── viewer/
     ├── Dockerfile
     ├── package.json
-    ├── vite.config.js
+    ├── tsconfig.json
+    ├── vite.config.ts
     ├── index.html
     ├── .env.example
     └── src/
-        ├── App.jsx
-        ├── main.jsx
+        ├── App.tsx
+        ├── main.tsx
         ├── index.css
         ├── lib/
-        │   └── api-client.js
+        │   └── api-client.ts
         ├── styles/
-        │   ├── tokens.js        # Design tokens (own copy)
+        │   ├── tokens.ts         # Design tokens (own copy)
         │   └── globals.css
         └── features/
             └── .gitkeep
@@ -72,114 +80,201 @@ public-service/
 
 ## Implementation
 
-### Step 1: Create Public API Main
+### Step 1: Create package.json (Public API)
 
-```python
-# public-service/api/app/main.py
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from app.lib.config import settings
-from app.features.health.routes import router as health_router
-
-app = FastAPI(
-    title="Master Plan Public API",
-    version="1.0.0",
-    docs_url="/docs" if settings.debug else None,  # Disable docs in prod
-    redoc_url=None,
-)
-
-# CORS - allow all origins for public API
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["GET", "HEAD", "OPTIONS"],
-    allow_headers=["*"],
-)
-
-app.include_router(health_router, tags=["Health"])
-
-@app.get("/")
-async def root():
-    return {"service": "Master Plan Public API", "status": "ok"}
+```json
+{
+  "name": "masterplan-public-api",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "fastify": "^4.26.0",
+    "@fastify/cors": "^9.0.0",
+    "pg": "^8.11.0",
+    "kysely": "^0.27.0",
+    "undici": "^6.6.0",
+    "dotenv": "^16.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/pg": "^8.10.0",
+    "typescript": "^5.3.0",
+    "tsx": "^4.7.0"
+  }
+}
 ```
 
-### Step 2: Create Config (Public Service)
+### Step 2: Create Main App (Public API)
 
-```python
-# public-service/api/app/lib/config.py
-from pydantic_settings import BaseSettings
-from typing import Optional
+```typescript
+// public-service/api/src/app.ts
+import Fastify from 'fastify';
+import cors from '@fastify/cors';
+import { config } from './lib/config.js';
+import { healthRoutes } from './features/health/routes.js';
+import { releaseRoutes } from './features/release/routes.js';
+import { statusRoutes } from './features/status/routes.js';
 
-class Settings(BaseSettings):
-    """Public service configuration - read-only, no admin secrets."""
+export async function buildApp() {
+  const app = Fastify({
+    logger: config.debug,
+  });
 
-    # Database (read-only)
-    database_url: str = "postgresql+asyncpg://readonly:readonly@localhost:5432/masterplan"
+  // CORS - allow all origins for public API
+  await app.register(cors, {
+    origin: '*',
+    credentials: false,
+    methods: ['GET', 'HEAD', 'OPTIONS'],
+  });
 
-    # CDN
-    cdn_base_url: str = "https://cdn.example.com"
+  // Routes
+  await app.register(healthRoutes, { prefix: '/health' });
+  await app.register(releaseRoutes, { prefix: '/api/releases' });
+  await app.register(statusRoutes, { prefix: '/api/status' });
 
-    # Client API (external)
-    client_api_url: Optional[str] = None
-    client_api_key: Optional[str] = None
-    client_api_timeout: int = 10
+  // Root
+  app.get('/', async () => ({
+    service: 'Master Plan Public API',
+    status: 'ok',
+  }));
 
-    # App settings
-    debug: bool = False
-
-    class Config:
-        env_file = ".env"
-
-
-settings = Settings()
+  return app;
+}
 ```
 
-### Step 3: Create Read-Only Database Connection
+### Step 3: Create Config (Public API)
 
-```python
-# public-service/api/app/lib/database.py
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
-from app.lib.config import settings
+```typescript
+// public-service/api/src/lib/config.ts
+import 'dotenv/config';
 
-# Read-only connection - no write operations allowed
-engine = create_async_engine(
-    settings.database_url,
-    echo=settings.debug,
-    pool_pre_ping=True,
-    pool_size=5,
-    max_overflow=10,
-)
+export const config = {
+  // Server
+  port: parseInt(process.env.PORT || '8001', 10),
+  host: process.env.HOST || '0.0.0.0',
 
-AsyncSessionLocal = sessionmaker(
-    engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-)
+  // Database (read-only)
+  databaseUrl: process.env.DATABASE_URL || 'postgres://readonly:readonly@localhost:5432/masterplan',
 
+  // CDN
+  cdnBaseUrl: process.env.CDN_BASE_URL || 'https://cdn.example.com',
 
-async def get_db():
-    async with AsyncSessionLocal() as session:
-        yield session
+  // Client API (external)
+  clientApiUrl: process.env.CLIENT_API_URL,
+  clientApiKey: process.env.CLIENT_API_KEY,
+  clientApiTimeout: parseInt(process.env.CLIENT_API_TIMEOUT || '10000', 10),
+
+  // App settings
+  debug: process.env.DEBUG === 'true',
+} as const;
 ```
 
-### Step 4: Create requirements.txt (Public API)
+### Step 4: Create Database Connection (Read-Only)
 
+```typescript
+// public-service/api/src/lib/database.ts
+import { Pool } from 'pg';
+import { Kysely, PostgresDialect } from 'kysely';
+import { config } from './config.js';
+
+// Create read-only connection pool
+const pool = new Pool({
+  connectionString: config.databaseUrl,
+  max: 10,
+});
+
+// Type-safe query builder (optional, can use raw SQL too)
+export const db = new Kysely<Database>({
+  dialect: new PostgresDialect({ pool }),
+});
+
+// For raw queries
+export async function query<T>(sql: string, params: unknown[] = []): Promise<T[]> {
+  const result = await pool.query(sql, params);
+  return result.rows;
+}
+
+// Database types (minimal, read-only views)
+interface Database {
+  projects: ProjectsTable;
+  integration_configs: IntegrationConfigsTable;
+}
+
+interface ProjectsTable {
+  id: string;
+  slug: string;
+  is_active: boolean;
+  current_release_id: string | null;
+}
+
+interface IntegrationConfigsTable {
+  id: string;
+  project_id: string;
+  api_base_url: string;
+  status_endpoint: string;
+  auth_type: string;
+  auth_credentials: unknown;
+  status_mapping: unknown;
+  polling_interval_seconds: number;
+}
 ```
-# public-service/api/requirements.txt
-fastapi==0.109.0
-uvicorn[standard]==0.27.0
-sqlalchemy[asyncio]==2.0.25
-asyncpg==0.29.0
-pydantic==2.5.3
-pydantic-settings==2.1.0
-httpx==0.27.0
+
+### Step 5: Create Health Routes
+
+```typescript
+// public-service/api/src/features/health/routes.ts
+import { FastifyPluginAsync } from 'fastify';
+
+export const healthRoutes: FastifyPluginAsync = async (app) => {
+  app.get('', async () => ({
+    status: 'healthy',
+    service: 'public-api',
+  }));
+
+  app.get('/ready', async () => ({
+    status: 'ready',
+  }));
+};
 ```
 
-**Note**: No alembic, no auth libraries - public service is read-only.
+### Step 6: Create Dockerfile (Public API)
 
-### Step 5: Create Viewer package.json
+```dockerfile
+# public-service/api/Dockerfile
+
+# Development stage
+FROM node:20-alpine AS dev
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+EXPOSE 8001
+CMD ["npm", "run", "dev"]
+
+# Build stage
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+# Production stage
+FROM node:20-alpine AS prod
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
+COPY --from=build /app/dist ./dist
+EXPOSE 8001
+CMD ["npm", "start"]
+```
+
+### Step 7: Create Viewer package.json
 
 ```json
 {
@@ -189,7 +284,7 @@ httpx==0.27.0
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "tsc && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -201,33 +296,53 @@ httpx==0.27.0
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@vitejs/plugin-react": "^4.2.0",
+    "typescript": "^5.3.0",
     "vite": "^5.0.0"
   }
 }
 ```
 
-### Step 6: Create Viewer App
+### Step 8: Create Viewer App
 
-```jsx
-// public-service/viewer/src/App.jsx
+```tsx
+// public-service/viewer/src/App.tsx
 import { useState, useEffect } from 'react';
 import './index.css';
 
 function App() {
   const [ready, setReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check public API health
-    fetch(`${import.meta.env.VITE_PUBLIC_API_URL}/health`)
+    const apiUrl = import.meta.env.VITE_PUBLIC_API_URL || 'http://localhost:8001';
+
+    fetch(`${apiUrl}/health`)
       .then(res => res.json())
       .then(() => setReady(true))
-      .catch(console.error);
+      .catch(err => {
+        console.error('API health check failed:', err);
+        setError('Failed to connect to API');
+      });
   }, []);
 
   return (
     <div className="app">
-      <h1>Master Plan Viewer</h1>
-      <p>Status: {ready ? 'Ready' : 'Loading...'}</p>
+      <header className="app-header">
+        <h1>Master Plan Viewer</h1>
+      </header>
+
+      <main className="app-main">
+        {error ? (
+          <div className="status-error">
+            <p>{error}</p>
+          </div>
+        ) : (
+          <div className="status-container">
+            <p>API Status: {ready ? 'Connected' : 'Connecting...'}</p>
+            <p className="hint">Map viewer will be implemented in TASK-020</p>
+          </div>
+        )}
+      </main>
     </div>
   );
 }
@@ -235,27 +350,7 @@ function App() {
 export default App;
 ```
 
-### Step 7: Create Health Routes
-
-```python
-# public-service/api/app/features/health/routes.py
-from fastapi import APIRouter
-
-router = APIRouter(prefix="/health")
-
-
-@router.get("")
-async def health_check():
-    return {"status": "healthy", "service": "public-api"}
-
-
-@router.get("/ready")
-async def readiness_check():
-    # Could add DB ping here
-    return {"status": "ready"}
-```
-
-### Step 8: Update docker-compose.yml (Root)
+### Step 9: Update docker-compose.yml (Root)
 
 ```yaml
 # Add to root docker-compose.yml
@@ -263,73 +358,46 @@ services:
   # ... existing postgres, admin-api, admin-ui ...
 
   public-api:
-    build: ./public-service/api
+    build:
+      context: ./public-service/api
+      target: dev
     ports:
       - "8001:8001"
     environment:
-      DATABASE_URL: postgresql+asyncpg://readonly:readonly@postgres:5432/masterplan
-      CDN_BASE_URL: http://localhost:9000  # MinIO in dev
-      CLIENT_API_URL: ${CLIENT_API_URL:-}
-      CLIENT_API_KEY: ${CLIENT_API_KEY:-}
+      DATABASE_URL: postgres://masterplan:masterplan_dev@postgres:5432/masterplan
+      CDN_BASE_URL: http://localhost:9000
+      DEBUG: "true"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./public-service/api:/app
+      - /app/node_modules
 
   viewer:
-    build: ./public-service/viewer
+    build:
+      context: ./public-service/viewer
+      target: dev
     ports:
       - "3000:3000"
     environment:
       VITE_PUBLIC_API_URL: http://localhost:8001
-```
-
-### Step 9: Create Dockerfile (Public API)
-
-```dockerfile
-# public-service/api/Dockerfile
-FROM python:3.11-slim
-
-WORKDIR /app
-
-# Install dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy app
-COPY app/ ./app/
-
-# Run
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
-```
-
-### Step 10: Create Dockerfile (Viewer)
-
-```dockerfile
-# public-service/viewer/Dockerfile
-FROM node:18-alpine AS build
-
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
-
-FROM nginx:alpine
-COPY --from=build /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-EXPOSE 3000
-CMD ["nginx", "-g", "daemon off;"]
+    volumes:
+      - ./public-service/viewer:/app
+      - /app/node_modules
 ```
 
 ## Acceptance Criteria
 
-- [ ] `public-service/api/` directory created with FastAPI scaffold
-- [ ] `public-service/viewer/` directory created with React scaffold
+- [ ] `public-service/api/` directory created with Node.js + TypeScript scaffold
+- [ ] `public-service/viewer/` directory created with React + TypeScript scaffold
 - [ ] Public API starts on port 8001
 - [ ] Viewer starts on port 3000
 - [ ] Health endpoint returns 200
 - [ ] **No shared code with admin-service** (verify imports)
 - [ ] docker-compose runs all 4 services together
 - [ ] Read-only database connection configured
+- [ ] TypeScript compiles without errors
 
 ## Notes
 
@@ -338,3 +406,4 @@ CMD ["nginx", "-g", "daemon off;"]
 - Public API does **NOT** run migrations (admin-api owns migrations)
 - Keep dependencies minimal - this is a lightweight proxy service
 - Viewer will be expanded in TASK-020
+- Use Fastify for better performance than Express
