@@ -1,7 +1,7 @@
 # TASK-006: Asset Upload Endpoints
 
 **Phase**: 2 - Storage + Assets
-**Status**: [ ] Not Started
+**Status**: [x] Completed
 **Priority**: P0 - Critical
 **Depends On**: TASK-005
 **Service**: **admin-service**
@@ -141,10 +141,10 @@ Delete asset from database and storage.
 
 ## Acceptance Criteria
 
-- [ ] Can request signed upload URL
-- [ ] Can upload file directly to storage using signed URL
-- [ ] Can confirm upload and create DB record
-- [ ] Can list assets with filtering
-- [ ] Can delete assets (DB + storage)
-- [ ] Only draft versions accept uploads
-- [ ] Duplicate paths update existing asset
+- [x] Can request signed upload URL
+- [x] Can upload file directly to storage using signed URL
+- [x] Can confirm upload and create DB record
+- [x] Can list assets with filtering
+- [x] Can delete assets (DB + storage)
+- [x] Only draft versions accept uploads
+- [x] Duplicate paths update existing asset
