@@ -1,7 +1,7 @@
 # TASK-000a: Theme System Implementation
 
 **Phase**: 0 - Parity Harness
-**Status**: [ ] Not Started
+**Status**: [x] Completed
 **Priority**: P0 - Critical (Blocker)
 **Depends On**: TOKENS.md, STATUS-TAXONOMY.md
 **Blocks**: TASK-014 (Admin UI), TASK-020 (Map Viewer)
@@ -124,11 +124,11 @@ Configure Ant Design theme in `admin-service/ui/src/styles/theme.ts`:
 
 ## Acceptance Criteria
 
-- [ ] Tokens implemented in `admin-service/ui/src/styles/tokens.ts`
-- [ ] Tokens implemented in `public-service/viewer/src/styles/tokens.ts`
-- [ ] Values match `gsd/parity/TOKENS.md` exactly
-- [ ] Status utilities match `gsd/parity/STATUS-TAXONOMY.md`
-- [ ] CSS variables generate correctly in both services
-- [ ] `useStatusStyle` hook works in both services
-- [ ] Status transitions animate smoothly (300ms ease-out)
-- [ ] Ant Design theme configured in admin-service/ui
+- [x] Tokens implemented in `admin-service/ui/src/styles/tokens.ts`
+- [x] Tokens implemented in `public-service/viewer/src/styles/tokens.ts`
+- [x] Values match `gsd/parity/TOKENS.md` exactly
+- [x] Status utilities match `gsd/parity/STATUS-TAXONOMY.md`
+- [x] CSS variables generate correctly in both services
+- [x] `useStatusStyle` hook works in both services
+- [x] Status transitions animate smoothly (300ms ease-out)
+- [x] Ant Design theme configured in admin-service/ui

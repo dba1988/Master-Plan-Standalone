@@ -1,44 +1,136 @@
-/* Global styles for Master Plan viewer */
+/**
+ * Global Styles and CSS Variables for Map Viewer
+ * Source of truth: gsd/parity/TOKENS.md
+ */
 
 :root {
-  /* Status colors */
-  --color-status-available: #22c55e;
-  --color-status-reserved: #eab308;
-  --color-status-sold: #ef4444;
-  --color-status-hidden: #6b7280;
-  --color-status-unreleased: #3b82f6;
+  /* Brand Colors */
+  --color-brand-primary: #3F5277;
+  --color-brand-secondary: #DAA520;
+  --color-brand-accent: #F1DA9E;
 
-  /* UI colors */
-  --color-background: #ffffff;
-  --color-surface: #f9fafb;
-  --color-border: #e5e7eb;
-  --color-text-primary: #111827;
-  --color-text-secondary: #6b7280;
-  --color-text-muted: #9ca3af;
+  /* Background Colors */
+  --color-bg-primary: #FFFFFF;
+  --color-bg-secondary: #F5F5F5;
+  --color-bg-tertiary: #EEEEEE;
+
+  /* Text Colors */
+  --color-text-primary: #212121;
+  --color-text-secondary: #757575;
+  --color-text-muted: #9E9E9E;
+  --color-text-inverse: #FFFFFF;
+
+  /* Border Colors */
+  --color-border-default: #E0E0E0;
+  --color-border-focus: #3F5277;
+
+  /* Status Colors - Fills */
+  --color-status-available-fill: rgba(75, 156, 85, 0.50);
+  --color-status-reserved-fill: rgba(255, 193, 7, 0.60);
+  --color-status-sold-fill: rgba(170, 70, 55, 0.60);
+  --color-status-hidden-fill: rgba(158, 158, 158, 0.30);
+  --color-status-unreleased-fill: transparent;
+
+  /* Status Colors - Solid (for legend badges) */
+  --color-status-available-solid: #4B9C55;
+  --color-status-reserved-solid: #FFC107;
+  --color-status-sold-solid: #AA4637;
+  --color-status-hidden-solid: #9E9E9E;
+  --color-status-unreleased-solid: #616161;
+
+  /* Interaction Colors */
+  --color-hover-fill: rgba(218, 165, 32, 0.3);
+  --color-hover-stroke: #F1DA9E;
+  --color-active-fill: rgba(63, 82, 119, 0.4);
+  --color-active-stroke: #3F5277;
+
+  /* Typography */
+  --font-family-primary: 'IBM Plex Sans Arabic', Arial, sans-serif;
+  --font-family-mono: 'IBM Plex Mono', monospace;
+
+  --font-size-xs: 0.625rem;
+  --font-size-sm: 0.75rem;
+  --font-size-md: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
 
   /* Spacing */
-  --spacing-xs: 4px;
-  --spacing-sm: 8px;
-  --spacing-md: 16px;
-  --spacing-lg: 24px;
-  --spacing-xl: 32px;
+  --spacing-1: 4px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-6: 24px;
+  --spacing-8: 32px;
+
+  /* Border Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.06);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,0.1), 0 4px 6px rgba(0,0,0,0.05);
+
+  /* Z-Index */
+  --z-overlay: 100;
+  --z-dropdown: 200;
+  --z-modal: 300;
+  --z-tooltip: 400;
+
+  /* Transitions */
+  --transition-fast: 150ms ease-in-out;
+  --transition-normal: 250ms ease-in-out;
+  --transition-status: 300ms ease-out;
+
+  /* Map Viewer Specific */
+  --map-legend-bg: rgba(255, 255, 255, 0.95);
+  --map-legend-padding: 12px;
+  --map-legend-radius: 8px;
 }
 
+/* Base Reset */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-family-primary);
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-primary);
+}
+
+/* App Layout */
 .app {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: var(--color-background);
+  background-color: var(--color-bg-primary);
 }
 
 .app-header {
-  padding: var(--spacing-md) var(--spacing-lg);
-  border-bottom: 1px solid var(--color-border);
-  background-color: var(--color-surface);
+  padding: var(--spacing-4) var(--spacing-6);
+  border-bottom: 1px solid var(--color-border-default);
+  background-color: var(--color-bg-secondary);
 }
 
 .app-header h1 {
-  font-size: 24px;
+  font-size: var(--font-size-xl);
   font-weight: 600;
   color: var(--color-text-primary);
 }
@@ -48,7 +140,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--spacing-lg);
+  padding: var(--spacing-6);
 }
 
 .status-container {
@@ -57,15 +149,27 @@
 }
 
 .status-container p {
-  margin-bottom: var(--spacing-sm);
+  margin-bottom: var(--spacing-2);
 }
 
 .status-container .hint {
-  font-size: 14px;
+  font-size: var(--font-size-sm);
   color: var(--color-text-muted);
 }
 
 .status-error {
   text-align: center;
-  color: var(--color-status-sold);
+  color: var(--color-status-sold-solid);
+}
+
+/* Focus styles */
+:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+/* Selection */
+::selection {
+  background-color: var(--color-brand-secondary);
+  color: var(--color-text-primary);
 }

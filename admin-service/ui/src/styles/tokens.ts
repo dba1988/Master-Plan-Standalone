@@ -1,7 +1,7 @@
 /**
- * Design Tokens for Map Viewer
+ * Design Tokens for Admin UI
  * Source of truth: gsd/parity/TOKENS.md
- * Own copy - no shared code with admin-service
+ * DO NOT modify without updating TOKENS.md first
  */
 
 // Brand Colors
@@ -32,6 +32,14 @@ export const colors = {
     default: '#E0E0E0',
     focus: '#3F5277',
   },
+
+  // Feedback Colors
+  feedback: {
+    success: '#4CAF50',
+    warning: '#FF9800',
+    error: '#F44336',
+    info: '#2196F3',
+  },
 } as const;
 
 // Typography
@@ -49,6 +57,7 @@ export const typography = {
     xl: '1.25rem',    // 20px
     '2xl': '1.5rem',  // 24px
     '3xl': '2rem',    // 32px
+    '4xl': '2.5rem',  // 40px
   },
   fontWeight: {
     light: 300,
@@ -56,6 +65,12 @@ export const typography = {
     medium: 500,
     semibold: 600,
     bold: 700,
+  },
+  lineHeight: {
+    tight: 1.2,
+    snug: 1.25,
+    normal: 1.5,
+    relaxed: 1.6,
   },
 } as const;
 
@@ -92,15 +107,20 @@ export const shadows = {
   sm: '0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06)',
   md: '0 4px 6px rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.06)',
   lg: '0 10px 15px rgba(0,0,0,0.1), 0 4px 6px rgba(0,0,0,0.05)',
+  xl: '0 20px 25px rgba(0,0,0,0.1), 0 10px 10px rgba(0,0,0,0.04)',
+  inner: 'inset 0 2px 4px rgba(0,0,0,0.06)',
 } as const;
 
 // Z-Index
 export const zIndex = {
   base: 0,
-  overlay: 100,
-  dropdown: 200,
-  modal: 300,
-  tooltip: 400,
+  dropdown: 100,
+  sticky: 200,
+  overlay: 300,
+  modal: 400,
+  popover: 500,
+  toast: 600,
+  max: 9999,
 } as const;
 
 // Transitions
@@ -111,28 +131,24 @@ export const transitions = {
   status: '300ms ease-out',
 } as const;
 
-// Map Viewer Specific
-export const mapTokens = {
-  overlay: {
-    strokeWidth: {
-      default: 1,
-      hover: 2,
-      active: 2,
-    },
-    hoverFill: 'rgba(218, 165, 32, 0.3)',
-    hoverStroke: '#F1DA9E',
-    activeFill: 'rgba(63, 82, 119, 0.4)',
-    activeStroke: '#3F5277',
-  },
-  legend: {
-    background: 'rgba(255, 255, 255, 0.95)',
-    padding: '12px',
-    radius: '8px',
-  },
-  bottomSheet: {
-    maxHeight: '60vh',
-    handleHeight: '4px',
-  },
+// Breakpoints
+export const breakpoints = {
+  xs: '0px',
+  sm: '640px',
+  md: '768px',
+  lg: '1024px',
+  xl: '1280px',
+  '2xl': '1536px',
+} as const;
+
+// Icon Sizes
+export const iconSizes = {
+  xs: '12px',
+  sm: '16px',
+  md: '20px',
+  lg: '24px',
+  xl: '32px',
+  '2xl': '48px',
 } as const;
 
 // Export all tokens
@@ -144,7 +160,8 @@ export const tokens = {
   shadows,
   zIndex,
   transitions,
-  mapTokens,
+  breakpoints,
+  iconSizes,
 } as const;
 
 export default tokens;
