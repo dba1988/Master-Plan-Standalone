@@ -1,7 +1,7 @@
 # TASK-009: Integration Config
 
 **Phase**: 3 - Overlays + Config
-**Status**: [ ] Not Started
+**Status**: [x] Completed
 **Priority**: P1 - High
 **Depends On**: TASK-008, TASK-000 (parity harness for status mapping)
 **Service**: **admin-service**
@@ -167,10 +167,10 @@ All credential values must be:
 
 ## Acceptance Criteria
 
-- [ ] Can save integration config
-- [ ] Credentials encrypted in database
-- [ ] Can test connection to client API
-- [ ] Status mapping works correctly (5-status taxonomy)
-- [ ] Different auth types supported (none, bearer, api_key, basic)
-- [ ] Credentials never exposed in responses
-- [ ] Connection test returns response time and sample data
+- [x] Can save integration config
+- [x] Credentials encrypted in database
+- [x] Can test connection to client API
+- [x] Status mapping works correctly (5-status taxonomy)
+- [x] Different auth types supported (none, bearer, api_key, basic)
+- [x] Credentials never exposed in responses
+- [x] Connection test returns response time and sample data

@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, String, Boolean, Integer, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
@@ -12,6 +12,17 @@ class IntegrationConfig(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, unique=True)
+
+    # Client API integration (for status polling)
+    api_base_url = Column(String(500), nullable=True)
+    auth_type = Column(String(20), default="none")  # none, bearer, api_key, basic
+    auth_credentials = Column(String(1000), nullable=True)  # Encrypted credentials (Fernet)
+    status_endpoint = Column(String(255), nullable=True)  # Relative path e.g. /api/units/status
+    status_mapping = Column(JSONB, default=dict)  # Maps client status to canonical 5-status
+    update_method = Column(String(20), default="polling")  # polling, sse, webhook
+    polling_interval_seconds = Column(Integer, default=30)
+    timeout_seconds = Column(Integer, default=10)
+    retry_count = Column(Integer, default=3)
 
     # CRM integration
     crm_enabled = Column(Boolean, default=False)
