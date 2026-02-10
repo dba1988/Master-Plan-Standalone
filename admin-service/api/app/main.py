@@ -6,6 +6,7 @@ from app.features.health.routes import router as health_router
 from app.features.auth.routes import router as auth_router
 from app.features.projects.routes import router as projects_router
 from app.features.assets.routes import router as assets_router
+from app.features.overlays.routes import router as overlays_router
 
 app = FastAPI(
     title="Master Plan Admin API",
@@ -26,6 +27,7 @@ app.include_router(health_router, prefix="/api", tags=["Health"])
 app.include_router(auth_router, prefix="/api", tags=["Authentication"])
 app.include_router(projects_router, prefix="/api", tags=["Projects"])
 app.include_router(assets_router, prefix="/api", tags=["Assets"])
+app.include_router(overlays_router, prefix="/api", tags=["Overlays"])
 
 
 @app.get("/")

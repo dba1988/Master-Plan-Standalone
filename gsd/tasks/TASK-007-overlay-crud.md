@@ -1,7 +1,7 @@
 # TASK-007: Overlay CRUD
 
 **Phase**: 3 - Overlays + Config
-**Status**: [ ] Not Started
+**Status**: [x] Completed
 **Priority**: P0 - Critical
 **Depends On**: TASK-004
 **Service**: **admin-service**
@@ -123,11 +123,11 @@ All create fields plus:
 
 ## Acceptance Criteria
 
-- [ ] Can list overlays with type filter
-- [ ] Can get single overlay by ID
-- [ ] Can create overlay
-- [ ] Can update overlay
-- [ ] Can delete overlay
-- [ ] Bulk upsert creates new / updates existing
-- [ ] Only draft versions can be modified
-- [ ] Geometry stored as JSONB
+- [x] Can list overlays with type filter
+- [x] Can get single overlay by ID
+- [x] Can create overlay
+- [x] Can update overlay
+- [x] Can delete overlay
+- [x] Bulk upsert creates new / updates existing
+- [x] Only draft versions can be modified
+- [x] Geometry stored as JSONB
