@@ -310,3 +310,7 @@ class AssetService:
             public=False,
             expires_in=expires_in,
         )
+
+    async def read_asset(self, asset: Asset) -> bytes:
+        """Read asset content from storage."""
+        return await self.storage.read_file(asset.storage_path)

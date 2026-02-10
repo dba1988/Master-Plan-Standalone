@@ -1,7 +1,7 @@
 # TASK-013b: Publish Workflow
 
 **Phase**: 4 - Build Pipeline
-**Status**: [ ] Not Started
+**Status**: [x] Completed
 **Priority**: P0 - Critical
 **Depends On**: TASK-013a (job infra), TASK-028 (release layout), TASK-010b (tiles)
 **Blocks**: TASK-019 (publish page), TASK-026 (public release endpoint)
@@ -175,14 +175,14 @@ Check if version is ready for publish (without starting job).
 
 ## Acceptance Criteria
 
-- [ ] Validation checks tiles, overlays, config exist
-- [ ] Release ID is unique and sortable
-- [ ] Tiles copied to immutable release folder
-- [ ] release.json generated with correct schema
-- [ ] Checksum included in manifest
-- [ ] Version updated with release_id and published_at
-- [ ] Project's current_release_id updated
-- [ ] Progress tracked through all steps
-- [ ] Errors captured and reported
-- [ ] POST /publish returns job_id
-- [ ] GET /publish/validate returns errors without starting job
+- [x] Validation checks tiles, overlays, config exist
+- [x] Release ID is unique and sortable
+- [x] Tiles copied to immutable release folder
+- [x] release.json generated with correct schema
+- [x] Checksum included in manifest
+- [x] Version updated with release_id and published_at
+- [x] Project's current_release_id updated
+- [x] Progress tracked through all steps
+- [x] Errors captured and reported
+- [x] POST /publish returns job_id
+- [x] GET /publish/validate returns errors without starting job

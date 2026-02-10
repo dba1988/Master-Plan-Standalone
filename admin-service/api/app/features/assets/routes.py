@@ -26,6 +26,8 @@ from app.schemas.asset import (
     UploadUrlResponse,
 )
 from app.services.asset_service import AssetService
+from app.services.svg_parser import svg_parser
+from app.services.overlay_service import OverlayService
 
 router = APIRouter(tags=["Assets"])
 
@@ -233,3 +235,107 @@ async def delete_asset(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Asset not found or version is not a draft"
         )
+
+
+@router.post(
+    "/projects/{slug}/versions/{version_number}/assets/{asset_id}/import-svg",
+)
+async def import_svg_overlays(
+    slug: str,
+    version_number: int,
+    asset_id: UUID,
+    overlay_type: str = Query("unit", description="Overlay type: zone, unit, poi"),
+    layer: Optional[str] = Query(None, description="Optional layer name"),
+    id_pattern: Optional[str] = Query(None, description="Regex to filter path IDs"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    """
+    Import overlays from an SVG asset.
+
+    Parses the SVG file and creates overlays from path elements.
+    Each path becomes an overlay with its geometry and calculated label position.
+
+    - **overlay_type**: Type of overlays to create (zone, unit, poi)
+    - **layer**: Optional layer to assign overlays to
+    - **id_pattern**: Optional regex to filter which paths to import by ID
+    """
+    asset_service = AssetService(db)
+    overlay_service = OverlayService(db)
+
+    # Get the asset
+    asset = await asset_service.get_asset(
+        project_slug=slug,
+        version_number=version_number,
+        asset_id=asset_id,
+    )
+
+    if not asset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Asset not found"
+        )
+
+    if asset.asset_type != "overlay_svg":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Asset must be an overlay_svg type"
+        )
+
+    # Download and parse SVG
+    try:
+        svg_bytes = await asset_service.read_asset(asset)
+        svg_content = svg_bytes.decode("utf-8")
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to read SVG file: {str(e)}"
+        )
+
+    # Parse SVG
+    parsed = svg_parser.parse_svg(svg_content, id_pattern=id_pattern)
+
+    if not parsed:
+        return {
+            "success": True,
+            "parsed_count": 0,
+            "created": 0,
+            "updated": 0,
+            "errors": [],
+            "message": "No matching paths found in SVG",
+        }
+
+    # Convert to overlay format
+    overlays = svg_parser.convert_to_overlays(
+        parsed,
+        overlay_type=overlay_type,
+        layer=layer,
+    )
+
+    # Get viewBox for reference
+    view_box = svg_parser.get_viewbox(svg_content)
+
+    # Bulk upsert overlays
+    result = await overlay_service.bulk_upsert(
+        project_slug=slug,
+        version_number=version_number,
+        overlays=overlays,
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project or version not found, or version is not a draft"
+        )
+
+    created, updated, errors = result
+
+    return {
+        "success": True,
+        "parsed_count": len(parsed),
+        "created": created,
+        "updated": updated,
+        "errors": [{"ref": e.ref, "error": e.error} for e in errors],
+        "view_box": view_box,
+        "message": f"Imported {created} new overlays, updated {updated} existing",
+    }

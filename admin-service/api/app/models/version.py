@@ -14,6 +14,8 @@ class ProjectVersion(Base):
     project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     version_number = Column(Integer, nullable=False)
     status = Column(String(20), default="draft")  # draft, published, archived
+    release_id = Column(String(50), nullable=True)  # Unique release ID when published
+    release_url = Column(String(500), nullable=True)  # CDN URL to release.json
     published_at = Column(DateTime, nullable=True)
     published_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

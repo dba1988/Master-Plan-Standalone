@@ -1,7 +1,7 @@
 # TASK-013a: Publish Job Infrastructure
 
 **Phase**: 4 - Build Pipeline
-**Status**: [ ] Not Started
+**Status**: [x] Completed
 **Priority**: P0 - Critical
 **Depends On**: TASK-002 (database schema)
 **Blocks**: TASK-013b (publish workflow)
@@ -146,11 +146,11 @@ CREATE INDEX idx_jobs_status ON jobs(status);
 
 ## Acceptance Criteria
 
-- [ ] Job model created with all fields
-- [ ] Job service handles create, update, complete, fail operations
-- [ ] Progress updates broadcast via SSE
-- [ ] Logs captured with timestamp and level
-- [ ] GET /jobs/{id} returns full job state
-- [ ] GET /jobs/{id}/stream returns SSE
-- [ ] Streaming stops when job completes/fails
-- [ ] Ping keepalive sent every 30s
+- [x] Job model created with all fields
+- [x] Job service handles create, update, complete, fail operations
+- [x] Progress updates broadcast via SSE
+- [x] Logs captured with timestamp and level
+- [x] GET /jobs/{id} returns full job state
+- [x] GET /jobs/{id}/stream returns SSE
+- [x] Streaming stops when job completes/fails
+- [x] Ping keepalive sent every 30s

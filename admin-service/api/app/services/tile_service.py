@@ -1,42 +1,18 @@
-# TASK-010a: Tile Generation Core
+"""
+Tile Generation Service
 
-**Phase**: 4 - Build Pipeline
-**Status**: [x] Completed
-**Priority**: P0 - Critical
-**Depends On**: TASK-027 (R2 storage)
-**Blocks**: TASK-010b (tile job integration)
-**Estimated Time**: 3-4 hours
-
-## Objective
-
-Implement the core tile generation service that creates DZI tiles from base map images using libvips/pyvips.
-
-## Scope
-
-This task covers ONLY the tile generation logic. Job integration is in TASK-010b.
-
-## Files to Create
-
-```
-admin-service/api/app/
-└── services/
-    └── tile_service.py
-```
-
-## Implementation
-
-```python
-# app/services/tile_service.py
-import os
-import tempfile
-import shutil
+Generates DZI (Deep Zoom Image) tiles from base map images using libvips.
+"""
+import math
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Dict, Optional
+
 import pyvips
+
 
 class TileService:
     """
-    Generate DZI (Deep Zoom Image) tiles from base map images.
+    Generate DZI tiles from base map images.
 
     Uses libvips for efficient large image processing.
     Output: tiles in {level}/{x}_{y}.{format} structure.
@@ -58,8 +34,8 @@ class TileService:
         self,
         source_path: str,
         output_dir: str,
-        progress_callback: Optional[callable] = None,
-    ) -> dict:
+        progress_callback: Optional[Callable[[int], None]] = None,
+    ) -> Dict:
         """
         Generate DZI tiles from source image.
 
@@ -71,7 +47,7 @@ class TileService:
         Returns:
             dict with tile metadata (width, height, levels, tile_count)
         """
-        # Load image
+        # Load image with sequential access for memory efficiency
         image = pyvips.Image.new_from_file(source_path, access="sequential")
         width = image.width
         height = image.height
@@ -79,8 +55,9 @@ class TileService:
         # Calculate number of levels
         max_dim = max(width, height)
         levels = 1
-        while max_dim > self.tile_size:
-            max_dim //= 2
+        temp = max_dim
+        while temp > self.tile_size:
+            temp //= 2
             levels += 1
 
         # Create output directory
@@ -92,10 +69,10 @@ class TileService:
             level_dir = Path(output_dir) / str(level)
             level_dir.mkdir(exist_ok=True)
 
-            # Scale factor for this level
+            # Scale factor for this level (0 = smallest, levels-1 = full size)
             scale = 2 ** (levels - level - 1)
-            level_width = width // scale
-            level_height = height // scale
+            level_width = max(1, width // scale)
+            level_height = max(1, height // scale)
 
             # Resize image for this level
             if scale > 1:
@@ -104,8 +81,8 @@ class TileService:
                 level_image = image
 
             # Calculate tile grid
-            cols = (level_width + self.tile_size - 1) // self.tile_size
-            rows = (level_height + self.tile_size - 1) // self.tile_size
+            cols = math.ceil(level_width / self.tile_size)
+            rows = math.ceil(level_height / self.tile_size)
 
             # Extract and save tiles
             for y in range(rows):
@@ -115,6 +92,9 @@ class TileService:
                     top = y * self.tile_size
                     tile_width = min(self.tile_size, level_width - left)
                     tile_height = min(self.tile_size, level_height - top)
+
+                    if tile_width <= 0 or tile_height <= 0:
+                        continue
 
                     # Extract tile
                     tile = level_image.crop(left, top, tile_width, tile_height)
@@ -166,99 +146,21 @@ class TileService:
         with open(output_path, "w") as f:
             f.write(xml)
 
+    def get_optimal_tile_size(
+        self,
+        image_width: int,
+        image_height: int,
+    ) -> int:
+        """Calculate optimal tile size based on image dimensions."""
+        max_dim = max(image_width, image_height)
 
-# Singleton instance
+        if max_dim <= 2048:
+            return 256
+        elif max_dim <= 8192:
+            return 512
+        else:
+            return 1024
+
+
+# Default singleton instance
 tile_service = TileService()
-```
-
-## Dependencies
-
-```txt
-# requirements.txt (add)
-pyvips>=2.2.1
-```
-
-Note: libvips must be installed on the system:
-```bash
-# Ubuntu/Debian
-apt-get install libvips-dev
-
-# macOS
-brew install vips
-
-# Alpine (Docker)
-apk add vips-dev
-```
-
-## Update Dockerfile
-
-```dockerfile
-# admin-service/api/Dockerfile (add to Stage 1)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    libpq-dev \
-    libvips-dev \  # Add this
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-```
-
-## Unit Tests
-
-```python
-# tests/test_tile_service.py
-import pytest
-import tempfile
-from pathlib import Path
-from PIL import Image
-from app.services.tile_service import tile_service
-
-@pytest.fixture
-def sample_image():
-    """Create a sample 1024x1024 image."""
-    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
-        img = Image.new("RGB", (1024, 1024), color="blue")
-        img.save(f.name)
-        yield f.name
-        Path(f.name).unlink()
-
-def test_generate_tiles(sample_image):
-    with tempfile.TemporaryDirectory() as output_dir:
-        result = tile_service.generate_tiles(
-            source_path=sample_image,
-            output_dir=output_dir,
-        )
-
-        assert result["width"] == 1024
-        assert result["height"] == 1024
-        assert result["levels"] >= 1
-        assert result["tile_count"] > 0
-
-        # Check tiles exist
-        assert (Path(output_dir) / "0" / "0_0.png").exists()
-
-def test_progress_callback(sample_image):
-    progress_values = []
-
-    def callback(percent):
-        progress_values.append(percent)
-
-    with tempfile.TemporaryDirectory() as output_dir:
-        tile_service.generate_tiles(
-            source_path=sample_image,
-            output_dir=output_dir,
-            progress_callback=callback,
-        )
-
-    assert len(progress_values) > 0
-    assert progress_values[-1] == 100
-```
-
-## Acceptance Criteria
-
-- [x] Tile generation works for PNG, JPEG, WebP inputs
-- [x] Output structure is `{level}/{x}_{y}.{format}`
-- [x] Handles large images (8K+) without memory issues
-- [x] Progress callback fires at each level
-- [x] Returns correct metadata (width, height, levels, tile_count)
-- [x] libvips installed in Docker image
-- [ ] Unit tests pass (needs integration testing)

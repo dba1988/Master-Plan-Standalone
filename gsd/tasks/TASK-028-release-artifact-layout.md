@@ -1,7 +1,7 @@
 # TASK-028: Release Artifact Layout & Versioning
 
 **Phase**: 4 - Build Pipeline
-**Status**: [ ] Not Started
+**Status**: [x] Completed
 **Priority**: P0 - Critical
 **Depends On**: TASK-027 (R2 storage)
 **Blocks**: TASK-013b (publish workflow), TASK-026 (public release endpoint)
@@ -251,11 +251,11 @@ async def cleanup_old_releases(
 
 ## Acceptance Criteria
 
-- [ ] Release ID generation is unique and sortable
-- [ ] Folder structure matches specification
-- [ ] release.json schema is complete
-- [ ] Tiles copied to immutable path on publish
-- [ ] Old releases preserved (not overwritten)
-- [ ] Rollback works by changing pointer
-- [ ] CDN URLs are correct format
-- [ ] Database schema updated for release_id
+- [x] Release ID generation is unique and sortable
+- [x] Folder structure matches specification
+- [x] release.json schema is complete
+- [ ] Tiles copied to immutable path on publish (TASK-013b)
+- [x] Old releases preserved (not overwritten)
+- [x] Rollback works by changing pointer
+- [x] CDN URLs are correct format
+- [x] Database schema updated for release_id

@@ -16,6 +16,7 @@ class Project(Base):
     name_ar = Column(String(255), nullable=True)
     description = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)
+    current_release_id = Column(String(50), nullable=True)  # Active release ID
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

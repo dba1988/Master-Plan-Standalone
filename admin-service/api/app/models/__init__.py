@@ -7,6 +7,7 @@ from app.models.layer import Layer
 from app.models.overlay import Overlay
 from app.models.integration import IntegrationConfig
 from app.models.release import Release
+from app.models.job import Job
 
 __all__ = [
     "User",
@@ -19,4 +20,5 @@ __all__ = [
     "Overlay",
     "IntegrationConfig",
     "Release",
+    "Job",
 ]

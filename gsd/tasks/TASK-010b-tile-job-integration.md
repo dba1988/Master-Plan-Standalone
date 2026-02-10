@@ -1,7 +1,7 @@
 # TASK-010b: Tile Generation Job Integration
 
 **Phase**: 4 - Build Pipeline
-**Status**: [ ] Not Started
+**Status**: [x] Completed
 **Priority**: P0 - Critical
 **Depends On**: TASK-010a (tile core), TASK-013a (job infrastructure)
 **Blocks**: TASK-013b (publish workflow)
@@ -264,10 +264,10 @@ class Job(Base):
 
 ## Acceptance Criteria
 
-- [ ] Job creates and returns job_id
-- [ ] Progress updates at each stage (download, generate, upload)
-- [ ] Tiles uploaded to R2 staging path
-- [ ] Job completes with result metadata
-- [ ] Failed jobs have error captured
-- [ ] GET /jobs/{id} returns status
-- [ ] Only draft versions can generate tiles
+- [x] Job creates and returns job_id
+- [x] Progress updates at each stage (download, generate, upload)
+- [x] Tiles uploaded to R2 staging path
+- [x] Job completes with result metadata
+- [x] Failed jobs have error captured
+- [x] GET /jobs/{id} returns status
+- [x] Only draft versions can generate tiles
