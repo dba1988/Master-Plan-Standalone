@@ -1,7 +1,7 @@
 # Phase 2: Storage + Assets
 
 **Duration**: Week 2-3
-**Status**: Not Started
+**Status**: Complete
 
 ## Objective
 
@@ -11,9 +11,10 @@ Implement Cloudflare R2 storage integration and asset upload workflow.
 
 | Task | Description | Status | Depends On |
 |------|-------------|--------|------------|
-| [TASK-027](../tasks/TASK-027-r2-storage-adapter.md) | R2 Storage Adapter | [ ] | TASK-001 |
-| [TASK-005](../tasks/TASK-005-storage-service.md) | Storage Service | [ ] | TASK-027 |
-| [TASK-006](../tasks/TASK-006-asset-upload.md) | Asset Upload Endpoints | [ ] | TASK-005 |
+| [TASK-027](../tasks/TASK-027-r2-storage-adapter.md) | R2 Storage Adapter | [x] | TASK-001 |
+| [TASK-005](../tasks/TASK-005-storage-service.md) | Storage Service | [x] | TASK-027 |
+| [TASK-006](../tasks/TASK-006-asset-upload.md) | Asset Upload Endpoints | [x] | TASK-005 |
+| [TASK-006a](../tasks/TASK-006a-asset-hierarchy-level.md) | Asset Hierarchy Level | [x] | TASK-006 |
 
 ## Deliverables
 

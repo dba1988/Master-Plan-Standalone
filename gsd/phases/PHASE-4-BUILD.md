@@ -1,7 +1,7 @@
 # Phase 4: Build Pipeline
 
 **Duration**: Week 4-5
-**Status**: Not Started
+**Status**: Complete
 
 ## Objective
 
@@ -11,12 +11,12 @@ Implement the build pipeline for tile generation, SVG parsing, and release publi
 
 | Task | Description | Status | Depends On |
 |------|-------------|--------|------------|
-| [TASK-010a](../tasks/TASK-010a-tile-generation-core.md) | Tile Generation Core (pyvips) | [ ] | TASK-027 |
-| [TASK-010b](../tasks/TASK-010b-tile-job-integration.md) | Tile Job Integration | [ ] | TASK-010a, TASK-013a |
-| [TASK-011](../tasks/TASK-011-svg-parser.md) | SVG Parser Service | [ ] | TASK-007 |
+| [TASK-010a](../tasks/TASK-010a-tile-generation-core.md) | Tile Generation Core (pyvips) | [x] | TASK-027 |
+| [TASK-010b](../tasks/TASK-010b-tile-job-integration.md) | Tile Job Integration | [x] | TASK-010a, TASK-013a |
+| [TASK-011](../tasks/TASK-011-svg-parser.md) | SVG Parser Service | [x] | TASK-007 |
 | ~~[TASK-012](../tasks/TASK-012-release-generator.md)~~ | ~~Release.json Generator~~ | [DEPRECATED] | Merged into TASK-013b |
-| [TASK-013a](../tasks/TASK-013a-publish-job-infra.md) | Publish Job Infrastructure | [ ] | TASK-008, TASK-009 |
-| [TASK-013b](../tasks/TASK-013b-publish-workflow.md) | Publish Workflow | [ ] | TASK-013a, TASK-028, TASK-010b |
+| [TASK-013a](../tasks/TASK-013a-publish-job-infra.md) | Publish Job Infrastructure | [x] | TASK-008, TASK-009 |
+| [TASK-013b](../tasks/TASK-013b-publish-workflow.md) | Publish Workflow | [x] | TASK-013a, TASK-028, TASK-010b |
 
 ## Deliverables
 

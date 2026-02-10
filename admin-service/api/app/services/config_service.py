@@ -1,9 +1,11 @@
 """
 Config Service
 
-Handles project configuration management per version.
+Handles project configuration management.
+
+Config belongs to projects (not versions) - versions are just release tags.
 """
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional
 from uuid import UUID
 
 from sqlalchemy import select
@@ -27,76 +29,50 @@ class ConfigService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_version_by_project_and_number(
-        self,
-        project_slug: str,
-        version_number: int,
-    ) -> Optional[Tuple[Project, ProjectVersion]]:
-        """Get project and version by slug and version number."""
-        # Get the project
-        project_result = await self.db.execute(
+    async def get_project_by_slug(self, project_slug: str) -> Optional[Project]:
+        """Get project by slug."""
+        result = await self.db.execute(
             select(Project).where(
                 Project.slug == project_slug,
                 Project.is_active == True
             )
         )
-        project = project_result.scalar_one_or_none()
+        return result.scalar_one_or_none()
+
+    async def has_draft_version(self, project_id: UUID) -> bool:
+        """Check if project has a draft version (allows modifications)."""
+        result = await self.db.execute(
+            select(ProjectVersion).where(
+                ProjectVersion.project_id == project_id,
+                ProjectVersion.status == "draft"
+            )
+        )
+        return result.scalar_one_or_none() is not None
+
+    async def get_config(self, project_slug: str) -> Optional[ProjectConfig]:
+        """Get config for a project."""
+        project = await self.get_project_by_slug(project_slug)
         if not project:
             return None
 
-        # Get the version
-        version_result = await self.db.execute(
-            select(ProjectVersion).where(
-                ProjectVersion.project_id == project.id,
-                ProjectVersion.version_number == version_number
-            )
-        )
-        version = version_result.scalar_one_or_none()
-        if not version:
-            return None
-
-        return project, version
-
-    async def get_config(
-        self,
-        project_slug: str,
-        version_number: int,
-    ) -> Optional[ProjectConfig]:
-        """Get config for a project version."""
-        result = await self.get_version_by_project_and_number(
-            project_slug, version_number
-        )
-        if not result:
-            return None
-
-        project, version = result
-
         config_result = await self.db.execute(
-            select(ProjectConfig).where(ProjectConfig.version_id == version.id)
+            select(ProjectConfig).where(ProjectConfig.project_id == project.id)
         )
         return config_result.scalar_one_or_none()
 
-    async def get_or_create_config(
-        self,
-        project_slug: str,
-        version_number: int,
-    ) -> Optional[ProjectConfig]:
+    async def get_or_create_config(self, project_slug: str) -> Optional[ProjectConfig]:
         """
-        Get config for a version, creating with defaults if it doesn't exist.
+        Get config for a project, creating with defaults if it doesn't exist.
 
-        Returns None if project/version not found.
+        Returns None if project not found.
         """
-        result = await self.get_version_by_project_and_number(
-            project_slug, version_number
-        )
-        if not result:
+        project = await self.get_project_by_slug(project_slug)
+        if not project:
             return None
-
-        project, version = result
 
         # Check if config exists
         config_result = await self.db.execute(
-            select(ProjectConfig).where(ProjectConfig.version_id == version.id)
+            select(ProjectConfig).where(ProjectConfig.project_id == project.id)
         )
         config = config_result.scalar_one_or_none()
 
@@ -105,7 +81,7 @@ class ConfigService:
 
         # Create default config
         config = ProjectConfig(
-            version_id=version.id,
+            project_id=project.id,
             theme=DEFAULT_THEME.copy(),
             map_settings=DEFAULT_MAP_SETTINGS.copy(),
             status_colors=DEFAULT_STATUS_COLORS.copy(),
@@ -133,28 +109,23 @@ class ConfigService:
     async def update_config(
         self,
         project_slug: str,
-        version_number: int,
         data: ProjectConfigUpdate,
     ) -> Optional[ProjectConfig]:
         """
-        Update config for a project version.
+        Update config for a project.
 
-        Returns None if project/version not found or version is not draft.
+        Returns None if project not found or no draft version exists.
         """
-        result = await self.get_version_by_project_and_number(
-            project_slug, version_number
-        )
-        if not result:
+        project = await self.get_project_by_slug(project_slug)
+        if not project:
             return None
 
-        project, version = result
-
-        # Only allow modifications to draft versions
-        if version.status != "draft":
+        # Only allow modifications if there's a draft version
+        if not await self.has_draft_version(project.id):
             return None
 
         # Get or create config
-        config = await self.get_or_create_config(project_slug, version_number)
+        config = await self.get_or_create_config(project_slug)
         if not config:
             return None
 
@@ -176,37 +147,29 @@ class ConfigService:
 
         return config
 
-    async def reset_config(
-        self,
-        project_slug: str,
-        version_number: int,
-    ) -> Optional[ProjectConfig]:
+    async def reset_config(self, project_slug: str) -> Optional[ProjectConfig]:
         """
         Reset config to defaults.
 
-        Returns None if project/version not found or version is not draft.
+        Returns None if project not found or no draft version exists.
         """
-        result = await self.get_version_by_project_and_number(
-            project_slug, version_number
-        )
-        if not result:
+        project = await self.get_project_by_slug(project_slug)
+        if not project:
             return None
 
-        project, version = result
-
-        # Only allow modifications to draft versions
-        if version.status != "draft":
+        # Only allow modifications if there's a draft version
+        if not await self.has_draft_version(project.id):
             return None
 
         # Get config
         config_result = await self.db.execute(
-            select(ProjectConfig).where(ProjectConfig.version_id == version.id)
+            select(ProjectConfig).where(ProjectConfig.project_id == project.id)
         )
         config = config_result.scalar_one_or_none()
 
         if not config:
             # Create with defaults
-            return await self.get_or_create_config(project_slug, version_number)
+            return await self.get_or_create_config(project_slug)
 
         # Reset to defaults
         config.theme = DEFAULT_THEME.copy()
@@ -244,7 +207,7 @@ class ConfigService:
 
         return {
             "id": str(config.id),
-            "version_id": str(config.version_id),
+            "project_id": str(config.project_id),
             "theme": theme,
             "map_settings": map_settings,
             "status_colors": status_colors,

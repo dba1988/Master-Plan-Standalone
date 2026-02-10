@@ -20,6 +20,9 @@ AsyncSessionLocal = async_sessionmaker(
     expire_on_commit=False,
 )
 
+# Alias for background tasks
+async_session_maker = AsyncSessionLocal
+
 
 async def get_db():
     async with AsyncSessionLocal() as session:

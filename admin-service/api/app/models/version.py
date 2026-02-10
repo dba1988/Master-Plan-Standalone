@@ -22,10 +22,7 @@ class ProjectVersion(Base):
 
     project = relationship("Project", back_populates="versions")
     publisher = relationship("User", foreign_keys=[published_by])
-    config = relationship("ProjectConfig", back_populates="version", uselist=False, cascade="all, delete-orphan")
-    assets = relationship("Asset", back_populates="version", cascade="all, delete-orphan")
     layers = relationship("Layer", back_populates="version", cascade="all, delete-orphan")
-    overlays = relationship("Overlay", back_populates="version", cascade="all, delete-orphan")
 
     __table_args__ = (
         UniqueConstraint('project_id', 'version_number', name='uq_project_version'),

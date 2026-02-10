@@ -6,6 +6,8 @@ Supports:
 - Get single overlay
 - Create/Update/Delete overlay
 - Bulk upsert for SVG import
+
+Overlays belong to projects (not versions) - versions are just release tags.
 """
 from typing import Optional
 from uuid import UUID
@@ -31,19 +33,57 @@ router = APIRouter(tags=["Overlays"])
 
 
 @router.get(
-    "/projects/{slug}/versions/{version_number}/overlays",
+    "/projects/{slug}/levels",
+)
+async def get_levels(
+    slug: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get available hierarchy levels for asset assignment.
+
+    Returns 'project' plus all zone refs discovered from imported overlays.
+    Used by the UI to populate the level dropdown when uploading assets.
+    """
+    service = OverlayService(db)
+    result = await service.list_overlays(
+        project_slug=slug,
+        overlay_type=OverlayType.ZONE,
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+
+    overlays, _ = result
+
+    # Build levels list: project + zone refs
+    levels = [{"value": "project", "label": "Project"}]
+    for overlay in sorted(overlays, key=lambda o: o.ref):
+        zone_ref = overlay.ref
+        # Create label from ref (e.g., "gc" -> "Zone GC", "a" -> "Zone A")
+        label = f"Zone {zone_ref.upper()}"
+        levels.append({"value": f"zone-{zone_ref}", "label": label})
+
+    return {"levels": levels}
+
+
+@router.get(
+    "/projects/{slug}/overlays",
     response_model=OverlayListResponse,
 )
 async def list_overlays(
     slug: str,
-    version_number: int,
     overlay_type: Optional[OverlayType] = Query(None, description="Filter by overlay type"),
     layer_id: Optional[UUID] = Query(None, description="Filter by layer ID"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    List all overlays for a project version.
+    List all overlays for a project.
 
     Optionally filter by overlay type and/or layer.
     Results are sorted by sort_order then ref.
@@ -51,7 +91,6 @@ async def list_overlays(
     service = OverlayService(db)
     result = await service.list_overlays(
         project_slug=slug,
-        version_number=version_number,
         overlay_type=overlay_type,
         layer_id=layer_id,
     )
@@ -59,7 +98,7 @@ async def list_overlays(
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project or version not found"
+            detail="Project not found"
         )
 
     overlays, total = result
@@ -70,12 +109,11 @@ async def list_overlays(
 
 
 @router.get(
-    "/projects/{slug}/versions/{version_number}/overlays/{overlay_id}",
+    "/projects/{slug}/overlays/{overlay_id}",
     response_model=OverlayResponse,
 )
 async def get_overlay(
     slug: str,
-    version_number: int,
     overlay_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -86,7 +124,6 @@ async def get_overlay(
     service = OverlayService(db)
     overlay = await service.get_overlay(
         project_slug=slug,
-        version_number=version_number,
         overlay_id=overlay_id,
     )
 
@@ -100,13 +137,12 @@ async def get_overlay(
 
 
 @router.post(
-    "/projects/{slug}/versions/{version_number}/overlays",
+    "/projects/{slug}/overlays",
     response_model=OverlayResponse,
     status_code=status.HTTP_201_CREATED,
 )
 async def create_overlay(
     slug: str,
-    version_number: int,
     data: OverlayCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_editor),
@@ -114,32 +150,30 @@ async def create_overlay(
     """
     Create a new overlay.
 
-    Only works for draft versions.
-    Ref must be unique within (version, overlay_type).
+    Only works if project has a draft version.
+    Ref must be unique within (project, overlay_type).
     """
     service = OverlayService(db)
     overlay = await service.create_overlay(
         project_slug=slug,
-        version_number=version_number,
         data=data,
     )
 
     if not overlay:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Could not create overlay. Project/version not found, version is not a draft, or ref already exists."
+            detail="Could not create overlay. Project not found, no draft version, or ref already exists."
         )
 
     return OverlayResponse.model_validate(overlay)
 
 
 @router.put(
-    "/projects/{slug}/versions/{version_number}/overlays/{overlay_id}",
+    "/projects/{slug}/overlays/{overlay_id}",
     response_model=OverlayResponse,
 )
 async def update_overlay(
     slug: str,
-    version_number: int,
     overlay_id: UUID,
     data: OverlayUpdate,
     db: AsyncSession = Depends(get_db),
@@ -148,12 +182,11 @@ async def update_overlay(
     """
     Update an existing overlay.
 
-    Only works for draft versions.
+    Only works if project has a draft version.
     """
     service = OverlayService(db)
     overlay = await service.update_overlay(
         project_slug=slug,
-        version_number=version_number,
         overlay_id=overlay_id,
         data=data,
     )
@@ -161,19 +194,18 @@ async def update_overlay(
     if not overlay:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Could not update overlay. Project/version not found, version is not a draft, overlay not found, or ref conflict."
+            detail="Could not update overlay. Project not found, no draft version, overlay not found, or ref conflict."
         )
 
     return OverlayResponse.model_validate(overlay)
 
 
 @router.delete(
-    "/projects/{slug}/versions/{version_number}/overlays/{overlay_id}",
+    "/projects/{slug}/overlays/{overlay_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def delete_overlay(
     slug: str,
-    version_number: int,
     overlay_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_editor),
@@ -181,29 +213,27 @@ async def delete_overlay(
     """
     Delete an overlay.
 
-    Only works for draft versions.
+    Only works if project has a draft version.
     """
     service = OverlayService(db)
     deleted = await service.delete_overlay(
         project_slug=slug,
-        version_number=version_number,
         overlay_id=overlay_id,
     )
 
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Overlay not found or version is not a draft"
+            detail="Overlay not found or no draft version exists"
         )
 
 
 @router.post(
-    "/projects/{slug}/versions/{version_number}/overlays/bulk",
+    "/projects/{slug}/overlays/bulk",
     response_model=BulkUpsertResponse,
 )
 async def bulk_upsert_overlays(
     slug: str,
-    version_number: int,
     data: BulkUpsertRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_editor),
@@ -211,23 +241,22 @@ async def bulk_upsert_overlays(
     """
     Bulk create or update overlays.
 
-    Matches existing overlays by (version_id, overlay_type, ref).
+    Matches existing overlays by (project_id, overlay_type, ref).
     - If exists: updates the overlay
     - If not exists: creates new overlay
 
-    Only works for draft versions.
+    Only works if project has a draft version.
     """
     service = OverlayService(db)
     result = await service.bulk_upsert(
         project_slug=slug,
-        version_number=version_number,
         overlays=data.overlays,
     )
 
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Project/version not found or version is not a draft"
+            detail="Project not found or no draft version exists"
         )
 
     created, updated, errors = result
@@ -239,12 +268,11 @@ async def bulk_upsert_overlays(
 
 
 @router.delete(
-    "/projects/{slug}/versions/{version_number}/overlays/by-type/{overlay_type}",
+    "/projects/{slug}/overlays/by-type/{overlay_type}",
     status_code=status.HTTP_200_OK,
 )
 async def delete_overlays_by_type(
     slug: str,
-    version_number: int,
     overlay_type: OverlayType,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_editor),
@@ -252,20 +280,19 @@ async def delete_overlays_by_type(
     """
     Delete all overlays of a specific type.
 
-    Only works for draft versions.
+    Only works if project has a draft version.
     Returns count of deleted overlays.
     """
     service = OverlayService(db)
     count = await service.delete_by_type(
         project_slug=slug,
-        version_number=version_number,
         overlay_type=overlay_type,
     )
 
     if count is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Project/version not found or version is not a draft"
+            detail="Project not found or no draft version exists"
         )
 
     return {"deleted": count}

@@ -120,3 +120,54 @@ class PublishValidationResponse(BaseModel):
     valid: bool
     errors: List[str] = []
     warnings: List[str] = []
+
+
+class BuildRequest(BaseModel):
+    """Request to start a build job."""
+    pass  # No options needed for now, could add force_rebuild etc.
+
+
+class BuildTilesInfo(BaseModel):
+    """Tile generation info in build response."""
+    levels: List[str] = []
+    total_count: int = 0
+    metadata: Dict[str, Any] = {}
+
+
+class BuildStatusResponse(BaseModel):
+    """Response for build status check."""
+    has_build: bool
+    build_id: Optional[str] = None
+    build_path: Optional[str] = None
+    preview_url: Optional[str] = None
+    built_at: Optional[datetime] = None
+    overlay_count: int = 0
+    tiles: Optional[BuildTilesInfo] = None
+
+
+class BuildValidationResponse(BaseModel):
+    """Response from build validation check."""
+    valid: bool
+    errors: List[str] = []
+    warnings: List[str] = []
+    base_map_count: int = 0
+    overlay_count: int = 0
+
+
+class ReleaseHistoryItem(BaseModel):
+    """Single release in history."""
+    version_number: int
+    release_id: str
+    release_url: Optional[str] = None
+    published_at: datetime
+    published_by: Optional[str] = None  # User email
+    overlay_count: Optional[int] = None
+    is_current: bool = False
+
+
+class ReleaseHistoryResponse(BaseModel):
+    """Response for release history."""
+    project_slug: str
+    current_release_id: Optional[str] = None
+    releases: List[ReleaseHistoryItem] = []
+    total: int = 0

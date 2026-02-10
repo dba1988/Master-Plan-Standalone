@@ -1,7 +1,7 @@
 # TASK-015: Projects List + Dashboard
 
 **Phase**: 5 - Admin UI
-**Status**: [ ] Not Started
+**Status**: [x] Complete
 **Priority**: P0 - Critical
 **Depends On**: TASK-014
 **Service**: **admin-service**

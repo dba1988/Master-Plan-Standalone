@@ -143,7 +143,12 @@ class ProjectService:
     async def create_version(
         self, project_id: UUID, data: VersionCreate
     ) -> Optional[ProjectVersion]:
-        """Create new version for a project."""
+        """
+        Create new version for a project.
+
+        Versions are just release tags (like git tags).
+        Assets, overlays, and config belong to the project directly.
+        """
         project = await self.get_project_by_id(project_id)
         if not project:
             return None
@@ -156,65 +161,42 @@ class ProjectService:
         max_version = result.scalar_one() or 0
         new_version_number = max_version + 1
 
-        # Create new version
+        # Create new version (just a release tag)
         version = ProjectVersion(
             project_id=project_id,
             version_number=new_version_number,
             status="draft",
         )
         self.db.add(version)
-        await self.db.flush()
 
-        # Create config (optionally cloned from base version)
-        if data.base_version:
-            # Find base version config
-            base_result = await self.db.execute(
-                select(ProjectVersion)
-                .options(selectinload(ProjectVersion.config))
-                .where(
-                    ProjectVersion.project_id == project_id,
-                    ProjectVersion.version_number == data.base_version
-                )
+        # Ensure project has a config (create default if not exists)
+        config_result = await self.db.execute(
+            select(ProjectConfig).where(ProjectConfig.project_id == project_id)
+        )
+        existing_config = config_result.scalar_one_or_none()
+
+        if not existing_config:
+            # Create default config for the project
+            config = ProjectConfig(
+                project_id=project_id,
+                theme={},
+                map_settings={},
+                status_colors={
+                    "available": "#52c41a",
+                    "reserved": "#faad14",
+                    "sold": "#ff4d4f",
+                    "hidden": "#d9d9d9",
+                    "unreleased": "#bfbfbf",
+                },
+                popup_config={},
+                filter_config={},
             )
-            base_version = base_result.scalar_one_or_none()
+            self.db.add(config)
 
-            if base_version and base_version.config:
-                # Clone config
-                config = ProjectConfig(
-                    version_id=version.id,
-                    theme=base_version.config.theme,
-                    map_settings=base_version.config.map_settings,
-                    status_colors=base_version.config.status_colors,
-                    popup_config=base_version.config.popup_config,
-                    filter_config=base_version.config.filter_config,
-                )
-            else:
-                config = self._create_default_config(version.id)
-        else:
-            config = self._create_default_config(version.id)
-
-        self.db.add(config)
         await self.db.commit()
         await self.db.refresh(version)
 
         return version
-
-    def _create_default_config(self, version_id: UUID) -> ProjectConfig:
-        """Create default project config."""
-        return ProjectConfig(
-            version_id=version_id,
-            theme={},
-            map_settings={},
-            status_colors={
-                "available": "#52c41a",
-                "reserved": "#faad14",
-                "sold": "#ff4d4f",
-                "hidden": "#8c8c8c",
-                "unreleased": "#d9d9d9"
-            },
-            popup_config={},
-            filter_config={},
-        )
 
     async def get_version(
         self, project_id: UUID, version_number: int
@@ -222,7 +204,6 @@ class ProjectService:
         """Get specific version of a project."""
         result = await self.db.execute(
             select(ProjectVersion)
-            .options(selectinload(ProjectVersion.config))
             .where(
                 ProjectVersion.project_id == project_id,
                 ProjectVersion.version_number == version_number

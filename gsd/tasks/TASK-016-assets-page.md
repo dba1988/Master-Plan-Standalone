@@ -1,7 +1,7 @@
 # TASK-016: Asset Management Page
 
 **Phase**: 5 - Admin UI
-**Status**: [ ] Not Started
+**Status**: [x] Complete
 **Priority**: P1 - High
 **Depends On**: TASK-006, TASK-015
 

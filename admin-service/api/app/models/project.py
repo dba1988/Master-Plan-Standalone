@@ -23,4 +23,7 @@ class Project(Base):
 
     creator = relationship("User", back_populates="projects", foreign_keys=[created_by])
     versions = relationship("ProjectVersion", back_populates="project", cascade="all, delete-orphan")
+    assets = relationship("Asset", back_populates="project", cascade="all, delete-orphan")
+    overlays = relationship("Overlay", back_populates="project", cascade="all, delete-orphan")
+    config = relationship("ProjectConfig", back_populates="project", uselist=False, cascade="all, delete-orphan")
     integration_config = relationship("IntegrationConfig", back_populates="project", uselist=False, cascade="all, delete-orphan")

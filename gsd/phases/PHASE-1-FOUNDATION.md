@@ -1,7 +1,7 @@
 # Phase 1: Foundation
 
 **Duration**: Week 1-2
-**Status**: Not Started
+**Status**: Complete
 
 ## Objective
 
@@ -11,11 +11,11 @@ Set up both service scaffolds, database schema, authentication, and basic projec
 
 | Task | Description | Status | Depends On |
 |------|-------------|--------|------------|
-| [TASK-001](../tasks/TASK-001-project-scaffold.md) | Admin Service Scaffold | [ ] | - |
-| [TASK-001b](../tasks/TASK-001b-public-service-scaffold.md) | Public Service Scaffold | [ ] | - |
-| [TASK-002](../tasks/TASK-002-database-schema.md) | Database Schema + Migrations | [ ] | TASK-001 |
-| [TASK-003](../tasks/TASK-003-auth-endpoints.md) | Auth Endpoints | [ ] | TASK-002 |
-| [TASK-004](../tasks/TASK-004-project-crud.md) | Project CRUD | [ ] | TASK-003 |
+| [TASK-001](../tasks/TASK-001-project-scaffold.md) | Admin Service Scaffold | [x] | - |
+| [TASK-001b](../tasks/TASK-001b-public-service-scaffold.md) | Public Service Scaffold | [x] | - |
+| [TASK-002](../tasks/TASK-002-database-schema.md) | Database Schema + Migrations | [x] | TASK-001 |
+| [TASK-003](../tasks/TASK-003-auth-endpoints.md) | Auth Endpoints | [x] | TASK-002 |
+| [TASK-004](../tasks/TASK-004-project-crud.md) | Project CRUD | [x] | TASK-003 |
 
 ## Deliverables
 

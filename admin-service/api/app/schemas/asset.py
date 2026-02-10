@@ -37,6 +37,7 @@ class UploadConfirmRequest(BaseModel):
     asset_type: AssetType
     filename: str = Field(..., min_length=1, max_length=255)
     file_size: int = Field(..., gt=0)
+    level: Optional[str] = Field(None, max_length=100, description="Hierarchy level: 'project', 'zone-a', etc.")
     metadata: Optional[Dict[str, Any]] = None
 
 
@@ -44,6 +45,7 @@ class AssetResponse(BaseModel):
     """Asset response schema."""
     id: UUID
     asset_type: str
+    level: Optional[str] = None
     filename: str
     original_filename: Optional[str] = None
     storage_path: str

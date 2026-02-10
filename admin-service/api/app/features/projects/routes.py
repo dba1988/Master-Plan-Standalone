@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -130,7 +132,7 @@ async def delete_project(
 @router.post("/{slug}/versions", response_model=VersionResponse, status_code=status.HTTP_201_CREATED)
 async def create_version(
     slug: str,
-    data: VersionCreate,
+    data: Optional[VersionCreate] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_editor),
 ):
@@ -146,6 +148,10 @@ async def create_version(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Project '{slug}' not found"
         )
+
+    # Use default if no body provided
+    if data is None:
+        data = VersionCreate()
 
     # Validate base_version exists if provided
     if data.base_version:

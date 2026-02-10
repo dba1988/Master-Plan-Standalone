@@ -6,6 +6,8 @@ Upload flow:
 2. Client uploads directly to storage using signed URL
 3. Client confirms upload via POST .../confirm
 4. API creates asset record in database
+
+Assets belong to projects (not versions) - versions are just release tags.
 """
 from typing import Optional
 from uuid import UUID
@@ -28,17 +30,17 @@ from app.schemas.asset import (
 from app.services.asset_service import AssetService
 from app.services.svg_parser import svg_parser
 from app.services.overlay_service import OverlayService
+from app.schemas.overlay import BulkOverlayItem, OverlayType
 
 router = APIRouter(tags=["Assets"])
 
 
 @router.post(
-    "/projects/{slug}/versions/{version_number}/assets/upload-url",
+    "/projects/{slug}/assets/upload-url",
     response_model=UploadUrlResponse,
 )
 async def request_upload_url(
     slug: str,
-    version_number: int,
     data: UploadUrlRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_editor),
@@ -52,7 +54,6 @@ async def request_upload_url(
     service = AssetService(db)
     result = await service.generate_upload_url(
         project_slug=slug,
-        version_number=version_number,
         filename=data.filename,
         asset_type=data.asset_type,
         content_type=data.content_type,
@@ -61,7 +62,7 @@ async def request_upload_url(
     if not result:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project or version not found, or version is not a draft"
+            detail="Project not found or no draft version exists"
         )
 
     return UploadUrlResponse(
@@ -72,13 +73,12 @@ async def request_upload_url(
 
 
 @router.post(
-    "/projects/{slug}/versions/{version_number}/assets/confirm",
+    "/projects/{slug}/assets/confirm",
     response_model=AssetResponse,
     status_code=status.HTTP_201_CREATED,
 )
 async def confirm_upload(
     slug: str,
-    version_number: int,
     data: UploadConfirmRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_editor),
@@ -92,7 +92,6 @@ async def confirm_upload(
     service = AssetService(db)
     asset = await service.confirm_upload(
         project_slug=slug,
-        version_number=version_number,
         data=data,
         user_id=current_user.id,
     )
@@ -100,39 +99,39 @@ async def confirm_upload(
     if not asset:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Upload confirmation failed. Project/version not found, version is not a draft, or file does not exist in storage."
+            detail="Upload confirmation failed. Project not found, no draft version, or file does not exist in storage."
         )
 
     return AssetResponse.model_validate(asset)
 
 
 @router.get(
-    "/projects/{slug}/versions/{version_number}/assets",
+    "/projects/{slug}/assets",
     response_model=AssetListResponse,
 )
 async def list_assets(
     slug: str,
-    version_number: int,
     asset_type: Optional[AssetType] = Query(None, description="Filter by asset type"),
+    level: Optional[str] = Query(None, description="Filter by hierarchy level (project, zone-a, zone-gc, etc.)"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    List all assets for a project version.
+    List all assets for a project.
 
-    Optionally filter by asset type.
+    Optionally filter by asset type or hierarchy level.
     """
     service = AssetService(db)
     result = await service.list_assets(
         project_slug=slug,
-        version_number=version_number,
         asset_type=asset_type,
+        level=level,
     )
 
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project or version not found"
+            detail="Project not found"
         )
 
     assets, total = result
@@ -143,12 +142,11 @@ async def list_assets(
 
 
 @router.get(
-    "/projects/{slug}/versions/{version_number}/assets/{asset_id}",
+    "/projects/{slug}/assets/{asset_id}",
     response_model=AssetResponse,
 )
 async def get_asset(
     slug: str,
-    version_number: int,
     asset_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -159,7 +157,6 @@ async def get_asset(
     service = AssetService(db)
     asset = await service.get_asset(
         project_slug=slug,
-        version_number=version_number,
         asset_id=asset_id,
     )
 
@@ -173,12 +170,11 @@ async def get_asset(
 
 
 @router.get(
-    "/projects/{slug}/versions/{version_number}/assets/{asset_id}/download",
+    "/projects/{slug}/assets/{asset_id}/download",
     response_model=AssetDownloadResponse,
 )
 async def get_download_url(
     slug: str,
-    version_number: int,
     asset_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -191,7 +187,6 @@ async def get_download_url(
     service = AssetService(db)
     download_url = await service.get_download_url(
         project_slug=slug,
-        version_number=version_number,
         asset_id=asset_id,
     )
 
@@ -208,12 +203,11 @@ async def get_download_url(
 
 
 @router.delete(
-    "/projects/{slug}/versions/{version_number}/assets/{asset_id}",
+    "/projects/{slug}/assets/{asset_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def delete_asset(
     slug: str,
-    version_number: int,
     asset_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_editor),
@@ -221,28 +215,26 @@ async def delete_asset(
     """
     Delete an asset from both database and storage.
 
-    Only works for draft versions.
+    Only works if project has a draft version.
     """
     service = AssetService(db)
     deleted = await service.delete_asset(
         project_slug=slug,
-        version_number=version_number,
         asset_id=asset_id,
     )
 
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Asset not found or version is not a draft"
+            detail="Asset not found or no draft version exists"
         )
 
 
 @router.post(
-    "/projects/{slug}/versions/{version_number}/assets/{asset_id}/import-svg",
+    "/projects/{slug}/assets/{asset_id}/import-svg",
 )
 async def import_svg_overlays(
     slug: str,
-    version_number: int,
     asset_id: UUID,
     overlay_type: str = Query("unit", description="Overlay type: zone, unit, poi"),
     layer: Optional[str] = Query(None, description="Optional layer name"),
@@ -266,7 +258,6 @@ async def import_svg_overlays(
     # Get the asset
     asset = await asset_service.get_asset(
         project_slug=slug,
-        version_number=version_number,
         asset_id=asset_id,
     )
 
@@ -305,12 +296,28 @@ async def import_svg_overlays(
             "message": "No matching paths found in SVG",
         }
 
-    # Convert to overlay format
-    overlays = svg_parser.convert_to_overlays(
+    # Convert to overlay format (dicts)
+    overlay_dicts = svg_parser.convert_to_overlays(
         parsed,
         overlay_type=overlay_type,
         layer=layer,
     )
+
+    # Convert dicts to BulkOverlayItem models
+    overlays = [
+        BulkOverlayItem(
+            overlay_type=OverlayType(d["overlay_type"]),
+            ref=d["ref"],
+            geometry=d["geometry"],
+            label=d.get("label"),
+            label_position=d.get("label_position"),
+            props=d.get("props"),
+            style_override=d.get("style_override"),
+            layer_id=None,
+            source_level=layer,  # Store the asset level for tracking
+        )
+        for d in overlay_dicts
+    ]
 
     # Get viewBox for reference
     view_box = svg_parser.get_viewbox(svg_content)
@@ -318,14 +325,13 @@ async def import_svg_overlays(
     # Bulk upsert overlays
     result = await overlay_service.bulk_upsert(
         project_slug=slug,
-        version_number=version_number,
         overlays=overlays,
     )
 
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project or version not found, or version is not a draft"
+            detail="Project not found or no draft version exists"
         )
 
     created, updated, errors = result

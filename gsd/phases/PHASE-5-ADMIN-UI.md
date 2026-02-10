@@ -1,7 +1,7 @@
 # Phase 5: Admin UI
 
 **Duration**: Week 5-7
-**Status**: Not Started
+**Status**: In Progress
 
 ## Objective
 
@@ -11,13 +11,13 @@ Build the admin interface for project management, editing, and publishing.
 
 | Task | Description | Status | Depends On |
 |------|-------------|--------|------------|
-| [TASK-014](../tasks/TASK-014-ui-scaffold-auth.md) | UI Scaffold + Auth | [ ] | TASK-003 |
-| [TASK-015](../tasks/TASK-015-projects-dashboard.md) | Projects List + Dashboard | [ ] | TASK-014 |
-| [TASK-016](../tasks/TASK-016-assets-page.md) | Asset Management Page | [ ] | TASK-006, TASK-015 |
+| [TASK-014](../tasks/TASK-014-ui-scaffold-auth.md) | UI Scaffold + Auth | [x] | TASK-003 |
+| [TASK-015](../tasks/TASK-015-projects-dashboard.md) | Projects List + Dashboard | [x] | TASK-014 |
+| [TASK-016](../tasks/TASK-016-assets-page.md) | Asset Management Page | [x] | TASK-006, TASK-015 |
 | [TASK-017a](../tasks/TASK-017a-editor-canvas.md) | Editor Canvas + Tools Panel | [ ] | TASK-007, TASK-016 |
 | [TASK-017b](../tasks/TASK-017b-editor-inspector.md) | Editor Inspector + Page | [ ] | TASK-017a |
-| [TASK-018](../tasks/TASK-018-integration-page.md) | Integration Setup Page | [ ] | TASK-009, TASK-015 |
-| [TASK-019](../tasks/TASK-019-publish-page.md) | Publish Page | [ ] | TASK-013b, TASK-015 |
+| [TASK-018](../tasks/TASK-018-integration-page.md) | Integration Setup Page | [x] | TASK-009, TASK-015 |
+| [TASK-019](../tasks/TASK-019-publish-page.md) | Publish Page | [x] | TASK-013b, TASK-015 |
 
 ## Deliverables
 

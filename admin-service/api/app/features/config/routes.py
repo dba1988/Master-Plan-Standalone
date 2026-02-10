@@ -1,12 +1,14 @@
 """
 Project Config endpoints.
 
-Manages per-version configuration:
+Manages per-project configuration:
 - Theme settings
 - Map settings (zoom, viewBox)
 - Status colors (5-status taxonomy)
 - Popup/tooltip config
 - Filter config
+
+Config belongs to projects (not versions) - versions are just release tags.
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,42 +27,37 @@ router = APIRouter(tags=["Project Config"])
 
 
 @router.get(
-    "/projects/{slug}/versions/{version_number}/config",
+    "/projects/{slug}/config",
     response_model=ProjectConfigResponse,
 )
 async def get_config(
     slug: str,
-    version_number: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Get configuration for a project version.
+    Get configuration for a project.
 
     Creates default config if it doesn't exist.
     """
     service = ConfigService(db)
-    config = await service.get_or_create_config(
-        project_slug=slug,
-        version_number=version_number,
-    )
+    config = await service.get_or_create_config(project_slug=slug)
 
     if not config:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project or version not found"
+            detail="Project not found"
         )
 
     return ProjectConfigResponse.model_validate(config)
 
 
 @router.get(
-    "/projects/{slug}/versions/{version_number}/config/full",
+    "/projects/{slug}/config/full",
     response_model=ProjectConfigWithDefaultsResponse,
 )
 async def get_config_with_defaults(
     slug: str,
-    version_number: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -71,15 +68,12 @@ async def get_config_with_defaults(
     Useful for the viewer which needs all config values.
     """
     service = ConfigService(db)
-    config = await service.get_or_create_config(
-        project_slug=slug,
-        version_number=version_number,
-    )
+    config = await service.get_or_create_config(project_slug=slug)
 
     if not config:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project or version not found"
+            detail="Project not found"
         )
 
     full_config = service.get_config_with_defaults(config)
@@ -87,63 +81,57 @@ async def get_config_with_defaults(
 
 
 @router.put(
-    "/projects/{slug}/versions/{version_number}/config",
+    "/projects/{slug}/config",
     response_model=ProjectConfigResponse,
 )
 async def update_config(
     slug: str,
-    version_number: int,
     data: ProjectConfigUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_editor),
 ):
     """
-    Update configuration for a project version.
+    Update configuration for a project.
 
-    Only works for draft versions.
+    Only works if project has a draft version.
     Fields are merged with existing values (partial update).
     """
     service = ConfigService(db)
     config = await service.update_config(
         project_slug=slug,
-        version_number=version_number,
         data=data,
     )
 
     if not config:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Project/version not found or version is not a draft"
+            detail="Project not found or no draft version exists"
         )
 
     return ProjectConfigResponse.model_validate(config)
 
 
 @router.post(
-    "/projects/{slug}/versions/{version_number}/config/reset",
+    "/projects/{slug}/config/reset",
     response_model=ProjectConfigResponse,
 )
 async def reset_config(
     slug: str,
-    version_number: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_editor),
 ):
     """
     Reset configuration to defaults.
 
-    Only works for draft versions.
+    Only works if project has a draft version.
     """
     service = ConfigService(db)
-    config = await service.reset_config(
-        project_slug=slug,
-        version_number=version_number,
-    )
+    config = await service.reset_config(project_slug=slug)
 
     if not config:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Project/version not found or version is not a draft"
+            detail="Project not found or no draft version exists"
         )
 
     return ProjectConfigResponse.model_validate(config)

@@ -11,8 +11,9 @@ class Overlay(Base):
     __tablename__ = "overlays"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    version_id = Column(UUID(as_uuid=True), ForeignKey("project_versions.id", ondelete="CASCADE"), nullable=False)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     layer_id = Column(UUID(as_uuid=True), ForeignKey("layers.id", ondelete="SET NULL"), nullable=True)
+    source_level = Column(String(100), nullable=True)  # Asset level: "project", "zone-a", "zone-gc", etc.
 
     overlay_type = Column(String(20), nullable=False)  # zone, unit, poi
     ref = Column(String(255), nullable=False)  # External reference (lot number, zone id)
@@ -39,12 +40,12 @@ class Overlay(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    version = relationship("ProjectVersion", back_populates="overlays")
+    project = relationship("Project", back_populates="overlays")
     layer = relationship("Layer", back_populates="overlays")
 
     __table_args__ = (
-        UniqueConstraint('version_id', 'overlay_type', 'ref', name='uq_overlay_ref'),
-        Index('ix_overlays_version', 'version_id'),
+        UniqueConstraint('project_id', 'overlay_type', 'ref', name='uq_overlay_ref'),
+        Index('ix_overlays_project', 'project_id'),
         Index('ix_overlays_type', 'overlay_type'),
         Index('ix_overlays_ref', 'ref'),
         Index('ix_overlays_status', 'status'),

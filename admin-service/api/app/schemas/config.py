@@ -136,7 +136,7 @@ class ProjectConfigUpdate(BaseModel):
 class ProjectConfigResponse(BaseModel):
     """Project configuration response."""
     id: UUID
-    version_id: UUID
+    project_id: UUID
     theme: Dict[str, Any]
     map_settings: Dict[str, Any]
     status_colors: Dict[str, Any]
@@ -152,7 +152,7 @@ class ProjectConfigResponse(BaseModel):
 class ProjectConfigWithDefaultsResponse(BaseModel):
     """Project configuration with defaults applied."""
     id: UUID
-    version_id: UUID
+    project_id: UUID
     theme: Dict[str, Any]
     map_settings: Dict[str, Any]
     status_colors: Dict[str, Any]

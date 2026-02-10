@@ -2,11 +2,13 @@
 Overlay Service
 
 Handles overlay CRUD operations with bulk upsert support.
+
+Overlays belong to projects (not versions) - versions are just release tags.
 """
 from typing import List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import func, select, and_
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.overlay import Overlay
@@ -27,60 +29,45 @@ class OverlayService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_version_by_project_and_number(
-        self,
-        project_slug: str,
-        version_number: int,
-    ) -> Optional[Tuple[Project, ProjectVersion]]:
-        """Get project and version by slug and version number."""
-        # Get the project
-        project_result = await self.db.execute(
+    async def get_project_by_slug(self, project_slug: str) -> Optional[Project]:
+        """Get project by slug."""
+        result = await self.db.execute(
             select(Project).where(
                 Project.slug == project_slug,
                 Project.is_active == True
             )
         )
-        project = project_result.scalar_one_or_none()
-        if not project:
-            return None
+        return result.scalar_one_or_none()
 
-        # Get the version
-        version_result = await self.db.execute(
+    async def has_draft_version(self, project_id: UUID) -> bool:
+        """Check if project has a draft version (allows modifications)."""
+        result = await self.db.execute(
             select(ProjectVersion).where(
-                ProjectVersion.project_id == project.id,
-                ProjectVersion.version_number == version_number
+                ProjectVersion.project_id == project_id,
+                ProjectVersion.status == "draft"
             )
         )
-        version = version_result.scalar_one_or_none()
-        if not version:
-            return None
-
-        return project, version
+        return result.scalar_one_or_none() is not None
 
     async def list_overlays(
         self,
         project_slug: str,
-        version_number: int,
         overlay_type: Optional[OverlayType] = None,
         layer_id: Optional[UUID] = None,
     ) -> Optional[Tuple[List[Overlay], int]]:
         """
-        List overlays for a project version with optional filters.
+        List overlays for a project with optional filters.
 
-        Returns None if project/version not found.
+        Returns None if project not found.
         Returns tuple of (overlays, total_count).
         """
-        result = await self.get_version_by_project_and_number(
-            project_slug, version_number
-        )
-        if not result:
+        project = await self.get_project_by_slug(project_slug)
+        if not project:
             return None
 
-        project, version = result
-
         # Build query
-        query = select(Overlay).where(Overlay.version_id == version.id)
-        count_query = select(func.count(Overlay.id)).where(Overlay.version_id == version.id)
+        query = select(Overlay).where(Overlay.project_id == project.id)
+        count_query = select(func.count(Overlay.id)).where(Overlay.project_id == project.id)
 
         if overlay_type:
             query = query.where(Overlay.overlay_type == overlay_type.value)
@@ -104,36 +91,31 @@ class OverlayService:
     async def get_overlay(
         self,
         project_slug: str,
-        version_number: int,
         overlay_id: UUID,
     ) -> Optional[Overlay]:
         """Get a specific overlay by ID."""
-        result = await self.get_version_by_project_and_number(
-            project_slug, version_number
-        )
-        if not result:
+        project = await self.get_project_by_slug(project_slug)
+        if not project:
             return None
-
-        project, version = result
 
         overlay_result = await self.db.execute(
             select(Overlay).where(
                 Overlay.id == overlay_id,
-                Overlay.version_id == version.id
+                Overlay.project_id == project.id
             )
         )
         return overlay_result.scalar_one_or_none()
 
     async def get_overlay_by_ref(
         self,
-        version_id: UUID,
+        project_id: UUID,
         overlay_type: str,
         ref: str,
     ) -> Optional[Overlay]:
         """Get overlay by type and reference."""
         result = await self.db.execute(
             select(Overlay).where(
-                Overlay.version_id == version_id,
+                Overlay.project_id == project_id,
                 Overlay.overlay_type == overlay_type,
                 Overlay.ref == ref
             )
@@ -143,35 +125,30 @@ class OverlayService:
     async def create_overlay(
         self,
         project_slug: str,
-        version_number: int,
         data: OverlayCreate,
     ) -> Optional[Overlay]:
         """
         Create a new overlay.
 
-        Returns None if project/version not found or version is not draft.
+        Returns None if project not found or no draft version.
         """
-        result = await self.get_version_by_project_and_number(
-            project_slug, version_number
-        )
-        if not result:
+        project = await self.get_project_by_slug(project_slug)
+        if not project:
             return None
 
-        project, version = result
-
-        # Only allow modifications to draft versions
-        if version.status != "draft":
+        # Only allow modifications if there's a draft version
+        if not await self.has_draft_version(project.id):
             return None
 
         # Check if ref already exists for this type
         existing = await self.get_overlay_by_ref(
-            version.id, data.overlay_type.value, data.ref
+            project.id, data.overlay_type.value, data.ref
         )
         if existing:
             return None  # Duplicate ref
 
         overlay = Overlay(
-            version_id=version.id,
+            project_id=project.id,
             overlay_type=data.overlay_type.value,
             ref=data.ref,
             geometry=data.geometry,
@@ -194,36 +171,31 @@ class OverlayService:
     async def update_overlay(
         self,
         project_slug: str,
-        version_number: int,
         overlay_id: UUID,
         data: OverlayUpdate,
     ) -> Optional[Overlay]:
         """
         Update an existing overlay.
 
-        Returns None if not found or version is not draft.
+        Returns None if not found or no draft version.
         """
-        result = await self.get_version_by_project_and_number(
-            project_slug, version_number
-        )
-        if not result:
+        project = await self.get_project_by_slug(project_slug)
+        if not project:
             return None
 
-        project, version = result
-
-        # Only allow modifications to draft versions
-        if version.status != "draft":
+        # Only allow modifications if there's a draft version
+        if not await self.has_draft_version(project.id):
             return None
 
         # Get overlay
-        overlay = await self.get_overlay(project_slug, version_number, overlay_id)
+        overlay = await self.get_overlay(project_slug, overlay_id)
         if not overlay:
             return None
 
         # Check ref uniqueness if being changed
         if data.ref and data.ref != overlay.ref:
             existing = await self.get_overlay_by_ref(
-                version.id,
+                project.id,
                 data.overlay_type.value if data.overlay_type else overlay.overlay_type,
                 data.ref
             )
@@ -246,31 +218,26 @@ class OverlayService:
     async def delete_overlay(
         self,
         project_slug: str,
-        version_number: int,
         overlay_id: UUID,
     ) -> bool:
         """
         Delete an overlay.
 
-        Returns True if deleted, False if not found or version is not draft.
+        Returns True if deleted, False if not found or no draft version.
         """
-        result = await self.get_version_by_project_and_number(
-            project_slug, version_number
-        )
-        if not result:
+        project = await self.get_project_by_slug(project_slug)
+        if not project:
             return False
 
-        project, version = result
-
-        # Only allow modifications to draft versions
-        if version.status != "draft":
+        # Only allow modifications if there's a draft version
+        if not await self.has_draft_version(project.id):
             return False
 
         # Get overlay
         overlay_result = await self.db.execute(
             select(Overlay).where(
                 Overlay.id == overlay_id,
-                Overlay.version_id == version.id
+                Overlay.project_id == project.id
             )
         )
         overlay = overlay_result.scalar_one_or_none()
@@ -286,26 +253,21 @@ class OverlayService:
     async def bulk_upsert(
         self,
         project_slug: str,
-        version_number: int,
         overlays: List[BulkOverlayItem],
     ) -> Optional[Tuple[int, int, List[BulkUpsertError]]]:
         """
         Bulk create or update overlays.
 
-        Matches by (version_id, overlay_type, ref).
-        Returns None if project/version not found or version is not draft.
+        Matches by (project_id, overlay_type, ref).
+        Returns None if project not found or no draft version.
         Returns tuple of (created_count, updated_count, errors).
         """
-        result = await self.get_version_by_project_and_number(
-            project_slug, version_number
-        )
-        if not result:
+        project = await self.get_project_by_slug(project_slug)
+        if not project:
             return None
 
-        project, version = result
-
-        # Only allow modifications to draft versions
-        if version.status != "draft":
+        # Only allow modifications if there's a draft version
+        if not await self.has_draft_version(project.id):
             return None
 
         created = 0
@@ -316,7 +278,7 @@ class OverlayService:
             try:
                 # Check if exists
                 existing = await self.get_overlay_by_ref(
-                    version.id, item.overlay_type.value, item.ref
+                    project.id, item.overlay_type.value, item.ref
                 )
 
                 if existing:
@@ -330,11 +292,12 @@ class OverlayService:
                     existing.sort_order = item.sort_order or 0
                     existing.is_visible = item.is_visible if item.is_visible is not None else True
                     existing.layer_id = item.layer_id
+                    existing.source_level = item.source_level
                     updated += 1
                 else:
                     # Create new
                     overlay = Overlay(
-                        version_id=version.id,
+                        project_id=project.id,
                         overlay_type=item.overlay_type.value,
                         ref=item.ref,
                         geometry=item.geometry,
@@ -346,6 +309,7 @@ class OverlayService:
                         sort_order=item.sort_order or 0,
                         is_visible=item.is_visible if item.is_visible is not None else True,
                         layer_id=item.layer_id,
+                        source_level=item.source_level,
                     )
                     self.db.add(overlay)
                     created += 1
@@ -364,31 +328,26 @@ class OverlayService:
     async def delete_by_type(
         self,
         project_slug: str,
-        version_number: int,
         overlay_type: OverlayType,
     ) -> Optional[int]:
         """
         Delete all overlays of a specific type.
 
-        Returns None if project/version not found or version is not draft.
+        Returns None if project not found or no draft version.
         Returns count of deleted overlays.
         """
-        result = await self.get_version_by_project_and_number(
-            project_slug, version_number
-        )
-        if not result:
+        project = await self.get_project_by_slug(project_slug)
+        if not project:
             return None
 
-        project, version = result
-
-        # Only allow modifications to draft versions
-        if version.status != "draft":
+        # Only allow modifications if there's a draft version
+        if not await self.has_draft_version(project.id):
             return None
 
         # Get all overlays of this type
         overlays_result = await self.db.execute(
             select(Overlay).where(
-                Overlay.version_id == version.id,
+                Overlay.project_id == project.id,
                 Overlay.overlay_type == overlay_type.value
             )
         )

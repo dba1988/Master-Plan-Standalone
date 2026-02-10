@@ -11,7 +11,7 @@ class ProjectConfig(Base):
     __tablename__ = "project_configs"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    version_id = Column(UUID(as_uuid=True), ForeignKey("project_versions.id", ondelete="CASCADE"), nullable=False, unique=True)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, unique=True)
 
     # Theme configuration
     theme = Column(JSONB, default=dict)  # { primaryColor, fontFamily, etc. }
@@ -37,4 +37,4 @@ class ProjectConfig(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    version = relationship("ProjectVersion", back_populates="config")
+    project = relationship("Project", back_populates="config")

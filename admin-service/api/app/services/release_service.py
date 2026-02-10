@@ -105,7 +105,7 @@ class ReleaseService:
         # Check config exists
         config_result = await self.db.execute(
             select(ProjectConfig).where(
-                ProjectConfig.version_id == version.id
+                ProjectConfig.project_id == project.id
             )
         )
         config = config_result.scalar_one_or_none()
@@ -115,16 +115,26 @@ class ReleaseService:
         # Check overlays exist
         overlay_result = await self.db.execute(
             select(Overlay).where(
-                Overlay.version_id == version.id
+                Overlay.project_id == project.id
             ).limit(1)
         )
         has_overlays = overlay_result.scalar_one_or_none() is not None
         if not has_overlays:
             warnings.append("No overlays defined")
 
-        # TODO: Check tiles exist in staging when TASK-010 is done
-        # For now, just warn
-        warnings.append("Tile generation not implemented yet")
+        # Check if there's a successful build for this version
+        from app.models.job import Job
+        build_job_result = await self.db.execute(
+            select(Job).where(
+                Job.project_id == project.id,
+                Job.version_id == version.id,
+                Job.job_type == "build",
+                Job.status == "completed"
+            ).limit(1)
+        )
+        has_build = build_job_result.scalar_one_or_none() is not None
+        if not has_build:
+            warnings.append("No build found - consider running build first to generate tiles")
 
         is_valid = len(errors) == 0
         return is_valid, errors, warnings
@@ -159,29 +169,33 @@ class ReleaseService:
         # Get config
         config_result = await self.db.execute(
             select(ProjectConfig).where(
-                ProjectConfig.version_id == version.id
+                ProjectConfig.project_id == project.id
             )
         )
         config = config_result.scalar_one_or_none()
 
-        # Build config section
+        # Build config section - extract from JSONB fields
+        map_settings = (config.map_settings or {}) if config else {}
+        theme = (config.theme or {}) if config else {}
+        zoom_settings = map_settings.get("zoom", {})
+
         release_config = ReleaseConfig(
-            default_view_box=config.default_view_box if config else "0 0 4096 4096",
+            default_view_box=map_settings.get("defaultViewBox", "0 0 4096 4096"),
             default_zoom=ZoomConfig(
-                min=config.min_zoom if config else 0.5,
-                max=config.max_zoom if config else 3.0,
-                default=config.default_zoom if config else 1.0,
+                min=zoom_settings.get("min", 0.5),
+                max=zoom_settings.get("max", 4.0),
+                default=zoom_settings.get("default", 1.0),
             ),
-            default_locale=config.default_locale if config else "en",
-            supported_locales=config.supported_locales if config else ["en"],
+            default_locale=theme.get("defaultLocale", "en"),
+            supported_locales=theme.get("supportedLocales", ["en"]),
             status_styles=config.status_colors if config else DEFAULT_STATUS_COLORS,
-            interaction_styles=config.interaction_colors if config else DEFAULT_INTERACTION_COLORS,
+            interaction_styles=DEFAULT_INTERACTION_COLORS,
         )
 
         # Get overlays
         overlay_result = await self.db.execute(
             select(Overlay)
-            .where(Overlay.version_id == version.id)
+            .where(Overlay.project_id == project.id)
             .order_by(Overlay.sort_order, Overlay.ref)
         )
         overlays = list(overlay_result.scalars().all())
@@ -250,9 +264,10 @@ class ReleaseService:
 
         if version:
             version.status = "published"
+            version.release_id = release_id
+            version.release_url = release_url
             version.published_at = datetime.utcnow()
             version.published_by = user_id
-            # Note: release_id column needs to be added to version model
             await self.db.commit()
 
     async def update_project_current_release(

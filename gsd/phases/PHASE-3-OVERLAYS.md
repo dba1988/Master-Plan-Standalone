@@ -1,7 +1,7 @@
 # Phase 3: Overlays + Config
 
 **Duration**: Week 3-4
-**Status**: Not Started
+**Status**: Complete
 
 ## Objective
 
@@ -11,9 +11,9 @@ Implement overlay management (zones, units, POIs) and project configuration.
 
 | Task | Description | Status | Depends On |
 |------|-------------|--------|------------|
-| [TASK-007](../tasks/TASK-007-overlay-crud.md) | Overlay CRUD | [ ] | TASK-004 |
-| [TASK-008](../tasks/TASK-008-project-config.md) | Project Config Endpoints | [ ] | TASK-004 |
-| [TASK-009](../tasks/TASK-009-integration-config.md) | Integration Config | [ ] | TASK-008 |
+| [TASK-007](../tasks/TASK-007-overlay-crud.md) | Overlay CRUD | [x] | TASK-004 |
+| [TASK-008](../tasks/TASK-008-project-config.md) | Project Config Endpoints | [x] | TASK-004 |
+| [TASK-009](../tasks/TASK-009-integration-config.md) | Integration Config | [x] | TASK-008 |
 
 ## Deliverables
 

@@ -124,6 +124,7 @@ class OverlayResponse(BaseModel):
     sort_order: int
     is_visible: bool
     layer_id: Optional[UUID] = None
+    source_level: Optional[str] = None  # Asset level: "project", "zone-a", etc.
     created_at: datetime
     updated_at: datetime
 
@@ -150,6 +151,7 @@ class BulkOverlayItem(BaseModel):
     sort_order: Optional[int] = 0
     is_visible: Optional[bool] = True
     layer_id: Optional[UUID] = None
+    source_level: Optional[str] = None  # Asset level: "project", "zone-a", etc.
 
     @field_validator('geometry')
     @classmethod

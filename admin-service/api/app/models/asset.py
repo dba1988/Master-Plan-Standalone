@@ -11,9 +11,10 @@ class Asset(Base):
     __tablename__ = "assets"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    version_id = Column(UUID(as_uuid=True), ForeignKey("project_versions.id", ondelete="CASCADE"), nullable=False)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
 
-    asset_type = Column(String(50), nullable=False)  # map_image, tile_set, icon, logo, background
+    asset_type = Column(String(50), nullable=False)  # base_map, overlay_svg, icon, other
+    level = Column(String(100), nullable=True)  # Hierarchy level: "project", "zone-a", "zone-gc", etc.
     filename = Column(String(255), nullable=False)
     original_filename = Column(String(255), nullable=True)
     mime_type = Column(String(100), nullable=False)
@@ -37,8 +38,9 @@ class Asset(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    version = relationship("ProjectVersion", back_populates="assets")
+    project = relationship("Project", back_populates="assets")
 
     __table_args__ = (
-        Index('ix_assets_version_type', 'version_id', 'asset_type'),
+        Index('ix_assets_project_type', 'project_id', 'asset_type'),
+        Index('ix_assets_project_level', 'project_id', 'level'),
     )
