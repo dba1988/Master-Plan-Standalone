@@ -1,20 +1,21 @@
 """
 Tile Generation Service
 
-Generates DZI (Deep Zoom Image) tiles from base map images using libvips.
+Generates DZI (Deep Zoom Image) tiles from base map images.
+Uses Pillow for image processing.
 """
 import math
 from pathlib import Path
 from typing import Callable, Dict, Optional
 
-import pyvips
+from PIL import Image
 
 
 class TileService:
     """
     Generate DZI tiles from base map images.
 
-    Uses libvips for efficient large image processing.
+    Uses Pillow for image processing.
     Output: tiles in {level}/{x}_{y}.{format} structure.
     """
 
@@ -47,10 +48,13 @@ class TileService:
         Returns:
             dict with tile metadata (width, height, levels, tile_count)
         """
-        # Load image with sequential access for memory efficiency
-        image = pyvips.Image.new_from_file(source_path, access="sequential")
-        width = image.width
-        height = image.height
+        # Load image
+        image = Image.open(source_path)
+        width, height = image.size
+
+        # Convert to RGB if necessary (handles RGBA, palette, etc.)
+        if image.mode not in ("RGB", "RGBA"):
+            image = image.convert("RGB")
 
         # Calculate number of levels
         max_dim = max(width, height)
@@ -76,7 +80,10 @@ class TileService:
 
             # Resize image for this level
             if scale > 1:
-                level_image = image.resize(1 / scale)
+                level_image = image.resize(
+                    (level_width, level_height),
+                    Image.Resampling.LANCZOS
+                )
             else:
                 level_image = image
 
@@ -90,21 +97,21 @@ class TileService:
                     # Calculate tile bounds
                     left = x * self.tile_size
                     top = y * self.tile_size
-                    tile_width = min(self.tile_size, level_width - left)
-                    tile_height = min(self.tile_size, level_height - top)
+                    right = min(left + self.tile_size, level_width)
+                    bottom = min(top + self.tile_size, level_height)
 
-                    if tile_width <= 0 or tile_height <= 0:
+                    if right <= left or bottom <= top:
                         continue
 
                     # Extract tile
-                    tile = level_image.crop(left, top, tile_width, tile_height)
+                    tile = level_image.crop((left, top, right, bottom))
 
                     # Save tile
                     tile_path = level_dir / f"{x}_{y}.{self.format}"
                     if self.format == "png":
-                        tile.write_to_file(str(tile_path))
+                        tile.save(str(tile_path), "PNG")
                     else:
-                        tile.write_to_file(str(tile_path), Q=self.quality)
+                        tile.save(str(tile_path), "JPEG", quality=self.quality)
 
                     tile_count += 1
 

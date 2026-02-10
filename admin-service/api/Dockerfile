@@ -2,11 +2,13 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies including libvips for tile generation
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
-    libvips-dev \
+    libjpeg-dev \
+    zlib1g-dev \
+    libpng-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies

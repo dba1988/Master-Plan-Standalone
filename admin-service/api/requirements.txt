@@ -12,4 +12,4 @@ httpx==0.26.0
 boto3==1.34.0
 aioboto3==12.3.0
 cryptography==42.0.0
-pyvips==2.2.2
+Pillow==10.2.0
