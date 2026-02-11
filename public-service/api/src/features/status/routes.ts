@@ -13,47 +13,9 @@ interface OverlayParams extends SlugParams {
 
 export const statusRoutes: FastifyPluginAsync = async (app) => {
   /**
-   * GET /api/status/:slug
-   * Returns all overlay statuses for a project.
-   */
-  app.get<{ Params: SlugParams }>('/:slug', async (request, reply) => {
-    const { slug } = request.params;
-
-    const statuses = await statusService.getStatuses(slug);
-
-    reply.header('Cache-Control', 'no-store');
-
-    const response: StatusResponse = {
-      project: slug,
-      statuses,
-      count: Object.keys(statuses).length,
-    };
-
-    return response;
-  });
-
-  /**
-   * GET /api/status/:slug/:overlayId
-   * Returns status for a specific overlay.
-   */
-  app.get<{ Params: OverlayParams }>('/:slug/:overlayId', async (request, reply) => {
-    const { slug, overlayId } = request.params;
-
-    const status = await statusService.getOverlayStatus(slug, overlayId);
-
-    reply.header('Cache-Control', 'no-store');
-
-    return {
-      project: slug,
-      overlay_id: overlayId,
-      status,
-      updated_at: new Date().toISOString(),
-    };
-  });
-
-  /**
    * GET /api/status/:slug/stream
    * SSE stream for real-time status updates.
+   * NOTE: Must be registered before /:slug/:overlayId to avoid route conflict.
    */
   app.get<{ Params: SlugParams }>('/:slug/stream', async (request, reply) => {
     const { slug } = request.params;
@@ -126,6 +88,46 @@ export const statusRoutes: FastifyPluginAsync = async (app) => {
       statuses,
       count: Object.keys(statuses).length,
       refreshed_at: new Date().toISOString(),
+    };
+  });
+
+  /**
+   * GET /api/status/:slug
+   * Returns all overlay statuses for a project.
+   */
+  app.get<{ Params: SlugParams }>('/:slug', async (request, reply) => {
+    const { slug } = request.params;
+
+    const statuses = await statusService.getStatuses(slug);
+
+    reply.header('Cache-Control', 'no-store');
+
+    const response: StatusResponse = {
+      project: slug,
+      statuses,
+      count: Object.keys(statuses).length,
+    };
+
+    return response;
+  });
+
+  /**
+   * GET /api/status/:slug/:overlayId
+   * Returns status for a specific overlay.
+   * NOTE: Must be registered after /:slug/stream to avoid route conflict.
+   */
+  app.get<{ Params: OverlayParams }>('/:slug/:overlayId', async (request, reply) => {
+    const { slug, overlayId } = request.params;
+
+    const status = await statusService.getOverlayStatus(slug, overlayId);
+
+    reply.header('Cache-Control', 'no-store');
+
+    return {
+      project: slug,
+      overlay_id: overlayId,
+      status,
+      updated_at: new Date().toISOString(),
     };
   });
 };

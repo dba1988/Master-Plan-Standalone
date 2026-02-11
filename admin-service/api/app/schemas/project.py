@@ -32,6 +32,8 @@ class VersionInfo(BaseModel):
     id: UUID
     version_number: int
     status: str
+    release_id: Optional[str] = None
+    release_url: Optional[str] = None
     created_at: datetime
     published_at: Optional[datetime] = None
 
@@ -75,6 +77,8 @@ class VersionResponse(BaseModel):
     project_id: UUID
     version_number: int
     status: str
+    release_id: Optional[str] = None
+    release_url: Optional[str] = None
     created_at: datetime
     published_at: Optional[datetime] = None
 

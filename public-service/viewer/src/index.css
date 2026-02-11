@@ -1,17 +1,79 @@
+/**
+ * Master Plan Viewer Global Styles
+ */
+
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-family: 'IBM Plex Sans Arabic', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: #1a1a2e;
+  color: #ffffff;
 }
 
 #root {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+/* OpenSeadragon Navigator styling */
+.navigator {
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 4px !important;
+  background-color: rgba(26, 26, 46, 0.9) !important;
+}
+
+/* OpenSeadragon controls */
+.openseadragon-container {
+  background-color: #1a1a2e !important;
+}
+
+/* SVG overlay pointer events */
+.overlay-svg {
+  pointer-events: none;
+}
+
+.overlay-svg .unit-shape {
+  pointer-events: auto;
+}
+
+/* Animation keyframes */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Selection panel animation */
+.selection-panel {
+  animation: fadeIn 0.2s ease-out;
+}
+
+/* Button hover states */
+button:hover {
+  opacity: 0.9;
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+/* Focus styles */
+button:focus-visible {
+  outline: 2px solid #4B9C55;
+  outline-offset: 2px;
 }

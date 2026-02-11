@@ -28,12 +28,15 @@ class Settings(BaseSettings):
     def cors_origins(self) -> List[str]:
         return json.loads(self.cors_origins_str)
 
-    # R2/S3 Storage (MinIO locally, R2 in production)
-    r2_endpoint: str = Field(default="http://localhost:9000", env="R2_ENDPOINT")
-    r2_access_key_id: str = Field(default="minioadmin", env="R2_ACCESS_KEY_ID")
-    r2_secret_access_key: str = Field(default="minioadmin", env="R2_SECRET_ACCESS_KEY")
-    r2_bucket: str = Field(default="masterplan", env="R2_BUCKET")
-    r2_region: str = Field(default="us-east-1", env="R2_REGION")
+    # Cloudflare R2 Storage
+    r2_endpoint: str = Field(
+        default="https://8bb4af4b4d2b18b318a2092f3818d68d.r2.cloudflarestorage.com",
+        env="R2_ENDPOINT"
+    )
+    r2_access_key_id: str = Field(default="", env="R2_ACCESS_KEY_ID")
+    r2_secret_access_key: str = Field(default="", env="R2_SECRET_ACCESS_KEY")
+    r2_bucket: str = Field(default="masterplan-dev", env="R2_BUCKET")
+    r2_region: str = Field(default="auto", env="R2_REGION")
 
     # CDN (optional, for production)
     cdn_base_url: str = Field(default="", env="CDN_BASE_URL")

@@ -87,9 +87,9 @@ class ProjectService:
         self.db.add(version)
         await self.db.flush()
 
-        # Create default config for the version
+        # Create default config for the project
         config = ProjectConfig(
-            version_id=version.id,
+            project_id=project.id,
             theme={},
             map_settings={},
             status_colors={
@@ -148,10 +148,26 @@ class ProjectService:
 
         Versions are just release tags (like git tags).
         Assets, overlays, and config belong to the project directly.
+
+        Only one draft version allowed at a time.
         """
         project = await self.get_project_by_id(project_id)
         if not project:
             return None
+
+        # Check if there's already a draft version
+        draft_result = await self.db.execute(
+            select(ProjectVersion).where(
+                ProjectVersion.project_id == project_id,
+                ProjectVersion.status == "draft"
+            ).limit(1)
+        )
+        existing_draft = draft_result.scalar_one_or_none()
+        if existing_draft:
+            raise ValueError(
+                f"Cannot create new version: draft version {existing_draft.version_number} already exists. "
+                "Publish or delete the existing draft first."
+            )
 
         # Get next version number
         result = await self.db.execute(
@@ -210,3 +226,25 @@ class ProjectService:
             )
         )
         return result.scalar_one_or_none()
+
+    async def delete_version(
+        self, project_id: UUID, version_number: int
+    ) -> bool:
+        """
+        Delete a draft version.
+
+        Only draft versions can be deleted. Published versions are immutable.
+        """
+        version = await self.get_version(project_id, version_number)
+        if not version:
+            return False
+
+        if version.status != "draft":
+            raise ValueError(
+                f"Cannot delete version {version_number}: only draft versions can be deleted. "
+                f"This version has status '{version.status}'."
+            )
+
+        await self.db.delete(version)
+        await self.db.commit()
+        return True

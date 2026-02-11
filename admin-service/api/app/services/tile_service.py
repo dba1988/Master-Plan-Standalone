@@ -17,19 +17,20 @@ class TileService:
 
     Uses Pillow for image processing.
     Output: tiles in {level}/{x}_{y}.{format} structure.
+    Default format is WebP for ~30% smaller file sizes than PNG.
     """
 
     def __init__(
         self,
         tile_size: int = 256,
         overlap: int = 1,
-        format: str = "png",
+        format: str = "webp",
         quality: int = 85,
     ):
         self.tile_size = tile_size
         self.overlap = overlap
         self.format = format
-        self.quality = quality
+        self.quality = quality  # Used for webp and jpeg
 
     def generate_tiles(
         self,
@@ -109,9 +110,11 @@ class TileService:
                     # Save tile
                     tile_path = level_dir / f"{x}_{y}.{self.format}"
                     if self.format == "png":
-                        tile.save(str(tile_path), "PNG")
+                        tile.save(str(tile_path), "PNG", optimize=True)
+                    elif self.format == "webp":
+                        tile.save(str(tile_path), "WEBP", quality=self.quality, method=4)
                     else:
-                        tile.save(str(tile_path), "JPEG", quality=self.quality)
+                        tile.save(str(tile_path), "JPEG", quality=self.quality, optimize=True)
 
                     tile_count += 1
 

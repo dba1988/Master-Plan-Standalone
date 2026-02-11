@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Test script for storage service with MinIO."""
+"""Test script for storage service with R2."""
 import asyncio
 import sys
 from pathlib import Path
@@ -11,10 +11,10 @@ from app.services.storage_service import storage_service
 
 async def test_storage():
     """Test basic storage operations."""
-    print("Testing storage service with MinIO...\n")
+    print("Testing storage service with R2...\n")
 
     project_slug = "test-project"
-    test_content = b"Hello, MinIO!"
+    test_content = b"Hello, R2!"
 
     # 1. Test presigned upload URL
     print("1. Testing presigned upload URL generation...")

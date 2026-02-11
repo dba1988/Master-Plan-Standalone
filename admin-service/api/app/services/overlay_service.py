@@ -45,7 +45,7 @@ class OverlayService:
             select(ProjectVersion).where(
                 ProjectVersion.project_id == project_id,
                 ProjectVersion.status == "draft"
-            )
+            ).limit(1)
         )
         return result.scalar_one_or_none() is not None
 

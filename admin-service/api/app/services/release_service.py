@@ -146,9 +146,10 @@ class ReleaseService:
         release_id: str,
         user_email: str,
         tiles_metadata: Optional[Dict[str, Any]] = None,
+        level: str = "project",
     ) -> Optional[ReleaseManifest]:
         """
-        Build the release.json manifest.
+        Build the release.json manifest for a specific level.
 
         Args:
             project_slug: Project slug
@@ -156,6 +157,7 @@ class ReleaseService:
             release_id: Generated release ID
             user_email: Publishing user's email
             tiles_metadata: Optional tile generation result
+            level: Level to build manifest for ("project" or zone ref like "zone-a")
 
         Returns:
             ReleaseManifest or None if project/version not found
@@ -179,8 +181,11 @@ class ReleaseService:
         theme = (config.theme or {}) if config else {}
         zoom_settings = map_settings.get("zoom", {})
 
+        # Determine viewBox: use zone-specific viewBox if available, otherwise project config
+        default_view_box = map_settings.get("defaultViewBox", "0 0 4096 4096")
+
         release_config = ReleaseConfig(
-            default_view_box=map_settings.get("defaultViewBox", "0 0 4096 4096"),
+            default_view_box=default_view_box,
             default_zoom=ZoomConfig(
                 min=zoom_settings.get("min", 0.5),
                 max=zoom_settings.get("max", 4.0),
@@ -192,13 +197,41 @@ class ReleaseService:
             interaction_styles=DEFAULT_INTERACTION_COLORS,
         )
 
-        # Get overlays
+        # Get overlays filtered by level
         overlay_result = await self.db.execute(
             select(Overlay)
             .where(Overlay.project_id == project.id)
             .order_by(Overlay.sort_order, Overlay.ref)
         )
-        overlays = list(overlay_result.scalars().all())
+        all_overlays = list(overlay_result.scalars().all())
+
+        # Filter overlays based on level
+        if level == "project":
+            # Project level: only zones (they have source_level matching their ref)
+            filtered_overlays = [o for o in all_overlays if o.overlay_type == "zone"]
+        else:
+            # Zone level: overlays belonging to this zone (source_level matches zone ref)
+            filtered_overlays = [o for o in all_overlays if o.source_level == level and o.overlay_type != "zone"]
+
+        # For zone levels, use the viewBox from the zone's overlays if available
+        zone_view_box = None
+        if level != "project" and filtered_overlays:
+            # Get viewBox from first overlay with a viewBox set
+            for o in filtered_overlays:
+                if o.view_box:
+                    zone_view_box = o.view_box
+                    break
+
+        # Override viewBox for zone levels if zone-specific viewBox is available
+        if zone_view_box:
+            release_config = ReleaseConfig(
+                default_view_box=zone_view_box,
+                default_zoom=release_config.default_zoom,
+                default_locale=release_config.default_locale,
+                supported_locales=release_config.supported_locales,
+                status_styles=release_config.status_styles,
+                interaction_styles=release_config.interaction_styles,
+            )
 
         release_overlays = [
             ReleaseOverlay(
@@ -208,18 +241,18 @@ class ReleaseService:
                 label=o.label,
                 label_position=o.label_position,
                 props=o.props or {},
-                layer=o.layer,
+                layer=o.source_level,
                 sort_order=o.sort_order or 0,
             )
-            for o in overlays
+            for o in filtered_overlays
         ]
 
         # Build tiles section if metadata provided
         tiles = None
         if tiles_metadata:
             tiles = TileConfig(
-                base_url="tiles",
-                format="dzi",
+                base_url=f"tiles/{level}",  # Level-specific tiles path
+                format=tiles_metadata.get("format", "webp"),
                 tile_size=tiles_metadata.get("tile_size", 256),
                 overlap=tiles_metadata.get("overlap", 1),
                 levels=tiles_metadata.get("levels", 1),
@@ -242,6 +275,26 @@ class ReleaseService:
             overlays=release_overlays,
             checksum=checksum,
         )
+
+    async def get_zone_levels(self, project_slug: str) -> List[str]:
+        """Get list of zone refs that have associated overlays (units)."""
+        project = await self.get_project_by_slug(project_slug)
+        if not project:
+            return []
+
+        # Find unique source_levels for non-zone overlays (these are the zones with content)
+        overlay_result = await self.db.execute(
+            select(Overlay.source_level)
+            .where(
+                Overlay.project_id == project.id,
+                Overlay.overlay_type != "zone",
+                Overlay.source_level.isnot(None),
+                Overlay.source_level != "project",
+            )
+            .distinct()
+        )
+        levels = [row[0] for row in overlay_result.all() if row[0]]
+        return levels
 
     def _calculate_checksum(self, data: List[Dict]) -> str:
         """Calculate SHA256 checksum of data."""

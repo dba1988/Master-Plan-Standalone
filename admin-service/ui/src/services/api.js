@@ -157,6 +157,10 @@ export const versionsApi = {
     const response = await api.post(`/projects/${projectSlug}/versions`);
     return response.data;
   },
+
+  delete: async (projectSlug, versionNumber) => {
+    await api.delete(`/projects/${projectSlug}/versions/${versionNumber}`);
+  },
 };
 
 // Assets API - Project level (not version level)

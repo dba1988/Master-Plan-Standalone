@@ -26,10 +26,10 @@ services:
       DATABASE_URL: postgresql+asyncpg://masterplan:masterplan_dev@postgres:5432/masterplan
       SECRET_KEY: dev-secret-key-change-in-production
       CORS_ORIGINS: '["http://localhost:3001"]'
-      R2_ENDPOINT: http://minio:9000
-      R2_ACCESS_KEY_ID: minioadmin
-      R2_SECRET_ACCESS_KEY: minioadmin
-      R2_BUCKET: masterplan
+      R2_ENDPOINT: https://8bb4af4b4d2b18b318a2092f3818d68d.r2.cloudflarestorage.com
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
+      R2_BUCKET: ${R2_BUCKET:-masterplan-dev}
     depends_on:
       postgres:
         condition: service_healthy
@@ -58,7 +58,7 @@ services:
       - "8001:8001"
     environment:
       DATABASE_URL: postgres://masterplan:masterplan_dev@postgres:5432/masterplan
-      CDN_BASE_URL: http://localhost:9000
+      CDN_BASE_URL: ${CDN_BASE_URL}
       DEBUG: "true"
     depends_on:
       postgres:
@@ -75,24 +75,10 @@ services:
       - "3000:3000"
     environment:
       VITE_PUBLIC_API_URL: http://localhost:8001
-      VITE_CDN_BASE_URL: http://localhost:9000
+      VITE_CDN_BASE_URL: ${VITE_CDN_BASE_URL}
     volumes:
       - ./public-service/viewer:/app
       - /app/node_modules
 
-  # MinIO for local R2 simulation
-  minio:
-    image: minio/minio:latest
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    command: server /data --console-address ":9001"
-    volumes:
-      - minio_data:/data
-
 volumes:
   postgres_data:
-  minio_data:

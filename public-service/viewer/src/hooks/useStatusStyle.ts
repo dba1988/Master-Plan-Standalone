@@ -8,7 +8,6 @@ import {
   UnitStatus,
   STATUS_COLORS,
   STATUS_LABELS,
-  INTERACTION_COLORS,
   isSelectable,
   isVisible,
   getCursor,

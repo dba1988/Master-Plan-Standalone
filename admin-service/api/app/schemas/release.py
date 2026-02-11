@@ -46,6 +46,14 @@ class ReleaseOverlay(BaseModel):
     sort_order: int = 0
 
 
+class ZoneManifestInfo(BaseModel):
+    """Info about an available zone manifest."""
+    zone_ref: str  # Zone overlay ref (e.g., "a")
+    level: str  # Level ID for tiles/manifest (e.g., "zone-a")
+    manifest_path: str  # Path to zone manifest (e.g., "zones/zone-a.json")
+    label: Optional[Dict[str, str]] = None
+
+
 class ReleaseManifest(BaseModel):
     """
     Complete release.json manifest.
@@ -62,6 +70,7 @@ class ReleaseManifest(BaseModel):
     config: ReleaseConfig
     tiles: Optional[TileConfig] = None
     overlays: List[ReleaseOverlay] = []
+    zones: List[ZoneManifestInfo] = []  # Available zone manifests (project level only)
 
     checksum: str = Field(..., description="SHA256 hash of overlay data")
 

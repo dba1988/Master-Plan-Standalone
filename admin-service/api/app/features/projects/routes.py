@@ -162,7 +162,13 @@ async def create_version(
                 detail=f"Version {data.base_version} not found"
             )
 
-    version = await service.create_version(project.id, data)
+    try:
+        version = await service.create_version(project.id, data)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
 
     return VersionResponse.model_validate(version)
 
@@ -197,6 +203,44 @@ async def get_version(
     return VersionResponse.model_validate(version)
 
 
+@router.delete("/{slug}/versions/{version_number}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_version(
+    slug: str,
+    version_number: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """
+    Delete a draft version. Admin only.
+
+    Only draft versions can be deleted. Published versions are immutable.
+    """
+    service = ProjectService(db)
+    project = await service.get_project_by_slug(slug)
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Project '{slug}' not found"
+        )
+
+    try:
+        deleted = await service.delete_version(project.id, version_number)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Version {version_number} not found"
+        )
+
+    return None
+
+
 def _build_project_detail_response(project) -> ProjectDetailResponse:
     """Build ProjectDetailResponse with version info."""
     versions = sorted(project.versions, key=lambda v: v.version_number)
@@ -206,6 +250,8 @@ def _build_project_detail_response(project) -> ProjectDetailResponse:
             id=v.id,
             version_number=v.version_number,
             status=v.status,
+            release_id=v.release_id,
+            release_url=v.release_url,
             created_at=v.created_at,
             published_at=v.published_at,
         )

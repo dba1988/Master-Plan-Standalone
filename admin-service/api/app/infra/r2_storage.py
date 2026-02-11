@@ -1,8 +1,7 @@
 """
-R2/S3 Storage Adapter
+Cloudflare R2 Storage Adapter
 
-Provides low-level S3-compatible storage operations.
-Works with Cloudflare R2 in production and MinIO locally.
+Provides low-level S3-compatible storage operations for Cloudflare R2.
 """
 import hashlib
 import hmac
@@ -17,10 +16,7 @@ from app.lib.config import settings
 
 
 def get_s3_client():
-    """
-    Initialize S3-compatible client.
-    Works with both Cloudflare R2 and MinIO.
-    """
+    """Initialize S3-compatible client for Cloudflare R2."""
     return boto3.client(
         's3',
         endpoint_url=settings.r2_endpoint,
@@ -53,13 +49,16 @@ class R2StorageAdapter:
         self.hmac_secret = settings.cdn_hmac_secret
 
     def _ensure_bucket_exists(self) -> None:
-        """Create bucket if it doesn't exist (for local dev with MinIO)."""
+        """Verify bucket exists. Buckets should be pre-created via setup-r2.sh."""
         try:
             self.client.head_bucket(Bucket=self.bucket)
         except ClientError as e:
             error_code = e.response.get('Error', {}).get('Code', '')
             if error_code in ('404', 'NoSuchBucket'):
-                self.client.create_bucket(Bucket=self.bucket)
+                raise Exception(
+                    f"Bucket '{self.bucket}' does not exist. "
+                    "Run scripts/setup-r2.sh to create R2 buckets."
+                )
             else:
                 raise
 

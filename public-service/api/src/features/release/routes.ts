@@ -33,7 +33,7 @@ export const releaseRoutes: FastifyPluginAsync = async (app) => {
       });
     }
 
-    const cdnUrl = `${config.cdnBaseUrl}/public/mp/${slug}/releases/${releaseId}/release.json`;
+    const cdnUrl = `${config.cdnBaseUrl}/mp/${slug}/releases/${releaseId}/release.json`;
 
     reply.header('Cache-Control', 'no-cache');
     reply.header('X-Release-Id', releaseId);
@@ -70,8 +70,9 @@ export const releaseRoutes: FastifyPluginAsync = async (app) => {
 
     const response: ReleaseInfo = {
       release_id: releaseId,
-      cdn_url: `${config.cdnBaseUrl}/public/mp/${slug}/releases/${releaseId}/release.json`,
-      tiles_base: `${config.cdnBaseUrl}/public/mp/${slug}/releases/${releaseId}/tiles`,
+      cdn_url: `${config.cdnBaseUrl}/mp/${slug}/releases/${releaseId}/release.json`,
+      // Tiles are stored under tiles/project/ (primary base map level)
+      tiles_base: `${config.cdnBaseUrl}/mp/${slug}/releases/${releaseId}/tiles/project`,
     };
 
     return response;

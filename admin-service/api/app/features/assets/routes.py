@@ -303,6 +303,9 @@ async def import_svg_overlays(
         layer=layer,
     )
 
+    # Get viewBox from SVG
+    view_box = svg_parser.get_viewbox(svg_content)
+
     # Convert dicts to BulkOverlayItem models
     overlays = [
         BulkOverlayItem(
@@ -314,13 +317,14 @@ async def import_svg_overlays(
             props=d.get("props"),
             style_override=d.get("style_override"),
             layer_id=None,
-            source_level=layer,  # Store the asset level for tracking
+            # For zones, use ref as source_level (enables drill-down navigation)
+            # For other types, use the asset's level (tracks where they belong)
+            source_level=d["ref"] if d["overlay_type"] == "zone" else layer,
+            # Store SVG viewBox for coordinate mapping
+            view_box=view_box,
         )
         for d in overlay_dicts
     ]
-
-    # Get viewBox for reference
-    view_box = svg_parser.get_viewbox(svg_content)
 
     # Bulk upsert overlays
     result = await overlay_service.bulk_upsert(

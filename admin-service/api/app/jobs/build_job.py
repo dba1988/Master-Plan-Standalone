@@ -3,7 +3,10 @@ Build Job
 
 Background job that generates tiles for all base map assets and creates a preview build.
 """
+import asyncio
 import tempfile
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -12,6 +15,9 @@ from uuid import UUID
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+# Concurrency limit for parallel uploads (using threads for true parallelism)
+UPLOAD_WORKERS = 20
 
 from app.models.asset import Asset
 from app.services.job_service import JobService
@@ -234,31 +240,58 @@ async def _generate_tiles_for_asset(
             output_dir=str(tiles_dir),
         )
 
-        # Upload tiles to build folder
+        # Upload tiles to build folder with TRUE parallel uploads using threads
         tiles_key_prefix = f"{build_path}/tiles/{level}/"
-        tile_count = 0
+        tile_files = list(tiles_dir.rglob(f"*.{result['format']}"))
+        total_tiles = len(tile_files)
 
-        for tile_file in tiles_dir.rglob(f"*.{result['format']}"):
+        # Thread-safe counters
+        uploaded_count = 0
+        upload_lock = threading.Lock()
+        content_type = f"image/{result['format']}"
+
+        def upload_single_tile(tile_file: Path) -> bool:
+            """Upload a single tile (runs in thread)."""
+            nonlocal uploaded_count
             relative_path = tile_file.relative_to(tiles_dir)
             key = f"{tiles_key_prefix}{relative_path}"
 
             with open(tile_file, "rb") as f:
-                content_type = f"image/{result['format']}"
-                await storage_service.storage.upload_file(
-                    key=key,
-                    body=f.read(),
-                    content_type=content_type,
+                # Synchronous upload in thread - this is the key for performance
+                storage_service.storage.client.put_object(
+                    Bucket=storage_service.storage.bucket,
+                    Key=key,
+                    Body=f.read(),
+                    ContentType=content_type,
                 )
-            tile_count += 1
 
-            # Update progress periodically
-            if tile_count % 50 == 0:
-                progress = progress_base + int((tile_count / result["tile_count"]) * progress_range * 0.8)
-                await job_service.update_progress(
-                    job_id,
-                    min(progress_base + progress_range, progress),
-                    f"Uploading tiles for {level}... ({tile_count}/{result['tile_count']})"
-                )
+            with upload_lock:
+                uploaded_count += 1
+            return True
+
+        # Use ThreadPoolExecutor for true parallelism
+        with ThreadPoolExecutor(max_workers=UPLOAD_WORKERS) as executor:
+            futures = {executor.submit(upload_single_tile, tf): tf for tf in tile_files}
+
+            for future in as_completed(futures):
+                try:
+                    future.result()
+                except Exception as e:
+                    tile_file = futures[future]
+                    await job_service.add_log(job_id, f"Failed to upload {tile_file}: {e}", "error")
+
+                # Update progress periodically
+                with upload_lock:
+                    current = uploaded_count
+                if current % 50 == 0 or current == total_tiles:
+                    progress = progress_base + int((current / total_tiles) * progress_range * 0.8)
+                    await job_service.update_progress(
+                        job_id,
+                        min(progress_base + progress_range, progress),
+                        f"Uploading tiles for {level}... ({current}/{total_tiles})"
+                    )
+
+        tile_count = uploaded_count
 
         return {
             "tiles_path": tiles_key_prefix,

@@ -19,11 +19,13 @@ import {
   Select,
   message,
   Breadcrumb,
+  Popconfirm,
 } from 'antd';
 import {
   PlusOutlined,
   HomeOutlined,
   ProjectOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons';
 import { projectsApi, versionsApi } from '../services/api';
 import AssetsTab from '../components/AssetsTab';
@@ -54,6 +56,18 @@ export default function ProjectDetailPage() {
     },
     onError: (error) => {
       message.error(error.response?.data?.detail || 'Failed to create version');
+    },
+  });
+
+  const deleteVersionMutation = useMutation({
+    mutationFn: (versionNumber) => versionsApi.delete(slug, versionNumber),
+    onSuccess: () => {
+      message.success('Draft version deleted');
+      queryClient.invalidateQueries({ queryKey: ['project', slug] });
+      setSelectedVersion(null);
+    },
+    onError: (error) => {
+      message.error(error.response?.data?.detail || 'Failed to delete version');
     },
   });
 
@@ -186,6 +200,24 @@ export default function ProjectDetailPage() {
               style={{ width: 180 }}
               placeholder="Select version"
             />
+            {currentVersion?.status === 'draft' && (
+              <Popconfirm
+                title="Delete draft version?"
+                description={`This will permanently delete Version ${currentVersion.version_number}. This cannot be undone.`}
+                onConfirm={() => deleteVersionMutation.mutate(currentVersion.version_number)}
+                okText="Delete"
+                okButtonProps={{ danger: true }}
+                cancelText="Cancel"
+              >
+                <Button
+                  icon={<DeleteOutlined />}
+                  danger
+                  loading={deleteVersionMutation.isPending}
+                >
+                  Delete Draft
+                </Button>
+              </Popconfirm>
+            )}
             <Button
               icon={<PlusOutlined />}
               onClick={() => createVersionMutation.mutate()}
