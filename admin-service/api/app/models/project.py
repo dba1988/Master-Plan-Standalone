@@ -27,3 +27,4 @@ class Project(Base):
     overlays = relationship("Overlay", back_populates="project", cascade="all, delete-orphan")
     config = relationship("ProjectConfig", back_populates="project", uselist=False, cascade="all, delete-orphan")
     integration_config = relationship("IntegrationConfig", back_populates="project", uselist=False, cascade="all, delete-orphan")
+    buildings = relationship("Building", back_populates="project", cascade="all, delete-orphan")

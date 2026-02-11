@@ -12,6 +12,7 @@ from app.features.integration.routes import router as integration_router
 from app.features.jobs.routes import router as jobs_router
 from app.features.tiles.routes import router as tiles_router
 from app.features.publish.routes import router as publish_router
+from app.features.buildings.routes import router as buildings_router
 
 app = FastAPI(
     title="Master Plan Admin API",
@@ -38,6 +39,7 @@ app.include_router(integration_router, prefix="/api", tags=["Integration"])
 app.include_router(jobs_router, prefix="/api", tags=["Jobs"])
 app.include_router(tiles_router, prefix="/api", tags=["Tiles"])
 app.include_router(publish_router, prefix="/api", tags=["Publish"])
+app.include_router(buildings_router, prefix="/api", tags=["Buildings"])
 
 
 @app.get("/")
