@@ -213,10 +213,11 @@ class ReleaseService:
             # Zone level: overlays belonging to this zone (source_level matches zone ref)
             filtered_overlays = [o for o in all_overlays if o.source_level == level and o.overlay_type != "zone"]
 
-        # For zone levels, use the viewBox from the zone's overlays if available
+        # For zone levels, use the viewBox from overlays (stored during SVG import)
+        # This is critical: overlays use SVG viewBox coordinate system, so the manifest
+        # must use the same viewBox for correct rendering
         zone_view_box = None
         if level != "project" and filtered_overlays:
-            # Get viewBox from first overlay with a viewBox set
             for o in filtered_overlays:
                 if o.view_box:
                     zone_view_box = o.view_box

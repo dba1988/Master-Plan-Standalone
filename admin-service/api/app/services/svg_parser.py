@@ -124,9 +124,21 @@ class SVGParserService:
         return result
 
     def get_viewbox(self, svg_content: str) -> Optional[str]:
-        """Extract viewBox from SVG."""
+        """Extract viewBox from SVG (case-insensitive)."""
         root = ET.fromstring(svg_content)
-        return root.get("viewBox")
+        # Try standard camelCase first
+        viewbox = root.get("viewBox")
+        if viewbox:
+            return viewbox
+        # Try lowercase (also valid in SVG)
+        viewbox = root.get("viewbox")
+        if viewbox:
+            return viewbox
+        # Try checking all attributes case-insensitively
+        for attr, value in root.attrib.items():
+            if attr.lower() == "viewbox":
+                return value
+        return None
 
     def get_dimensions(self, svg_content: str) -> Tuple[Optional[float], Optional[float]]:
         """Extract width and height from SVG."""

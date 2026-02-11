@@ -37,19 +37,68 @@ export default function MasterPlanViewer({
   const [selectedRef, setSelectedRef] = useState<string | null>(null);
   const [hoveredRef, setHoveredRef] = useState<string | null>(null);
 
-  // Get overlay coordinate system width from viewBox
-  // Overlays are defined in viewBox coordinates, so use that for transform calculations
+  // Parse viewBox to get coordinate system dimensions and offset
+  // Format: "minX minY width height"
   const viewBoxParts = manifest.config.default_view_box.split(' ').map(Number);
+  const viewBoxMinX = viewBoxParts.length === 4 ? viewBoxParts[0] : 0;
+  const viewBoxMinY = viewBoxParts.length === 4 ? viewBoxParts[1] : 0;
   const overlayWidth = viewBoxParts.length === 4 ? viewBoxParts[2] : (manifest.tiles?.width || 4096);
+  const overlayHeight = viewBoxParts.length === 4 ? viewBoxParts[3] : (manifest.tiles?.height || 4096);
+
+  // Calculate minimum zoom to fit entire image in viewport (no cropping)
+  // This ensures user sees full map but can't zoom out to show black areas beyond it
+  const calculateMinZoomToFit = useCallback((
+    containerWidth: number,
+    containerHeight: number,
+    imageWidth: number,
+    imageHeight: number
+  ): number => {
+    // OpenSeadragon normalizes image width to 1.0 in viewport coordinates
+    // At zoom=1, image width fills container width
+
+    const imageAspect = imageWidth / imageHeight;
+    const containerAspect = containerWidth / containerHeight;
+
+    // For "fit" mode (entire image visible):
+    // - If image is wider than container (relative): zoom=1 fits width, height is smaller (OK)
+    // - If image is taller than container: need to zoom OUT so height fits
+    if (imageAspect >= containerAspect) {
+      // Image is wider - at zoom=1, width fills, height fits within
+      return 1;
+    } else {
+      // Image is taller - need to zoom out so height fits
+      // At zoom=z, displayed height = containerWidth * z / imageAspect
+      // We need: displayed height <= containerHeight
+      // containerWidth * z / imageAspect = containerHeight
+      // z = containerHeight * imageAspect / containerWidth = imageAspect / containerAspect
+      return imageAspect / containerAspect;
+    }
+  }, []);
 
   // Initialize OpenSeadragon
   useEffect(() => {
     if (!containerRef.current || !manifest.tiles) return;
 
     const { tiles } = manifest;
+    const container = containerRef.current;
 
     // Determine tile format (default to webp for new builds, fallback to png)
     const tileFormat = tiles.format === 'dzi' ? 'webp' : (tiles.format || 'webp');
+
+    // Calculate minimum zoom to fit entire image in viewport
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight;
+    const minZoomToFit = calculateMinZoomToFit(
+      containerWidth,
+      containerHeight,
+      tiles.width,
+      tiles.height
+    );
+
+    // Min zoom is exactly what's needed to fit the image - can't zoom out further
+    const effectiveMinZoom = minZoomToFit;
+    // Default zoom shows the entire image
+    const effectiveDefaultZoom = minZoomToFit;
 
     // Build DZI tile source
     const tileSource: OpenSeadragon.TileSourceOptions = {
@@ -65,31 +114,65 @@ export default function MasterPlanViewer({
     };
 
     const viewer = OpenSeadragon({
-      element: containerRef.current,
+      element: container,
       tileSources: tileSource,
       showNavigator: true,
       navigatorPosition: 'BOTTOM_RIGHT',
       navigatorSizeRatio: 0.15,
       showNavigationControl: true,
       navigationControlAnchor: OpenSeadragon.ControlAnchor.TOP_LEFT,
-      minZoomLevel: manifest.config.default_zoom.min,
+      minZoomLevel: effectiveMinZoom,
       maxZoomLevel: manifest.config.default_zoom.max,
-      defaultZoomLevel: manifest.config.default_zoom.default,
-      visibilityRatio: 0.5,
+      defaultZoomLevel: effectiveDefaultZoom,
+      // Ensure entire image stays visible - can't pan beyond edges
+      visibilityRatio: 1.0,
       constrainDuringPan: true,
+      // Fit entire image in view (not fill/crop)
+      homeFillsViewer: false,
       animationTime: 0.3,
       blendTime: 0.1,
       immediateRender: true,
-      preserveViewport: true,
+      preserveViewport: false, // Allow recalculation on resize
       preload: true,
       showRotationControl: false,
       gestureSettingsMouse: {
         clickToZoom: false,
         dblClickToZoom: true,
       },
+      gestureSettingsTouch: {
+        pinchToZoom: true,
+        flickEnabled: true,
+        flickMinSpeed: 120,
+        flickMomentum: 0.25,
+      },
     });
 
     viewerRef.current = viewer;
+
+    // Recalculate min zoom on resize (important for mobile orientation changes)
+    const handleResize = () => {
+      if (!viewer.viewport) return;
+
+      const newContainerWidth = container.clientWidth;
+      const newContainerHeight = container.clientHeight;
+      const newMinZoom = calculateMinZoomToFit(
+        newContainerWidth,
+        newContainerHeight,
+        tiles.width,
+        tiles.height
+      );
+
+      // Update min zoom level (use type assertion for OpenSeadragon internals)
+      (viewer.viewport as unknown as { minZoomLevel: number }).minZoomLevel = newMinZoom;
+
+      // If current zoom is below new minimum, zoom to minimum
+      const currentZoom = viewer.viewport.getZoom();
+      if (currentZoom < newMinZoom) {
+        viewer.viewport.zoomTo(newMinZoom);
+      }
+    };
+
+    viewer.addHandler('resize', handleResize);
 
     // Update transform on viewport change
     const updateTransform = () => {
@@ -100,21 +183,21 @@ export default function MasterPlanViewer({
 
       // OpenSeadragon normalizes image width to 1.0 in viewport coordinates
       // At zoom=1, the full image width fits the container width
-      // pixels per viewport unit = containerWidth * zoom
 
-      // Overlays use their own coordinate system (viewBox/overlayWidth)
-      // Scale from overlay coords to screen pixels:
-      // screenPixel = overlayCoord * (containerWidth * zoom) / overlayWidth
+      // Overlays use viewBox coordinate system: "minX minY width height"
+      // An overlay at (x, y) maps to normalized viewport ((x-minX)/width, (y-minY)/height)
+      // Scale factor converts overlay units to screen pixels
       const scale = (containerSize.x * zoom) / overlayWidth;
 
       // Viewport bounds are in normalized coords (0-1 for full image)
-      // Convert to overlay coords then to pixels for translation
       const viewportBounds = viewer.viewport.getBounds(true);
 
-      // viewportBounds.x is in normalized coords (0-1)
-      // To convert to pixels: viewportBounds.x * overlayWidth * scale
-      const x = -viewportBounds.x * overlayWidth * scale;
-      const y = -viewportBounds.y * overlayWidth * scale;
+      // Transform calculation for SVG <g> element:
+      // For overlay coord (ox, oy), final screen position = (ox * scale + tx, oy * scale + ty)
+      // This should equal: ((ox - minX) / width - viewportBounds.x) * containerWidth * zoom
+      // Solving: tx = -(minX + viewportBounds.x * width) * scale
+      const x = -(viewBoxMinX + viewportBounds.x * overlayWidth) * scale;
+      const y = -(viewBoxMinY + viewportBounds.y * overlayHeight) * scale;
 
       setTransform({ x, y, scale });
     };
@@ -130,7 +213,7 @@ export default function MasterPlanViewer({
       viewer.destroy();
       viewerRef.current = null;
     };
-  }, [manifest, tilesBaseUrl, overlayWidth]);
+  }, [manifest, tilesBaseUrl, overlayWidth, overlayHeight, viewBoxMinX, viewBoxMinY, calculateMinZoomToFit]);
 
   // Handle overlay selection
   const handleOverlayClick = useCallback((overlay: ReleaseOverlay) => {

@@ -16,17 +16,27 @@ import {
   ErrorState,
 } from './components';
 
-// Get project slug from URL path or query param
-function getProjectSlug(): string | null {
+// Parse URL to get project slug and optional zone
+function parseUrl(): { project: string | null; zone: string | null } {
+  const params = new URLSearchParams(window.location.search);
+
   // Try path: /master-plan/{slug} or /{slug}
   const pathMatch = window.location.pathname.match(/^\/(?:master-plan\/)?([a-z0-9-]+)\/?$/i);
-  if (pathMatch) {
-    return pathMatch[1];
-  }
+  const project = pathMatch ? pathMatch[1] : params.get('project');
+  const zone = params.get('zone');
 
-  // Try query param: ?project={slug}
-  const params = new URLSearchParams(window.location.search);
-  return params.get('project');
+  return { project, zone };
+}
+
+// Update URL without page reload
+function updateUrl(project: string, zone?: string) {
+  const params = new URLSearchParams();
+  params.set('project', project);
+  if (zone) {
+    params.set('zone', zone);
+  }
+  const newUrl = `${window.location.pathname}?${params.toString()}`;
+  window.history.pushState({ project, zone }, '', newUrl);
 }
 
 type AppState = 'loading' | 'ready' | 'error';
@@ -95,52 +105,9 @@ function App() {
     }
   }, []);
 
-  // Initialize on mount
-  useEffect(() => {
-    const slug = getProjectSlug();
-    if (!slug) {
-      setError('No project specified. Use ?project=<slug> or /master-plan/<slug>');
-      setState('error');
-      return;
-    }
-
-    setProjectSlug(slug);
-    loadRelease(slug);
-  }, [loadRelease]);
-
-  // Subscribe to status updates
-  useEffect(() => {
-    if (!projectSlug || state !== 'ready') return;
-
-    const unsubscribe = api.subscribeToStatusUpdates(
-      projectSlug,
-      (newStatuses) => {
-        setStatuses((prev) => {
-          const updated = { ...prev };
-          for (const [ref, status] of Object.entries(newStatuses)) {
-            updated[ref] = isValidStatus(status) ? status : 'available';
-          }
-          return updated;
-        });
-      },
-      (err) => {
-        console.warn('Status SSE error:', err);
-      }
-    );
-
-    return () => {
-      unsubscribe();
-    };
-  }, [projectSlug, state]);
-
-  // Handle overlay selection
-  const handleOverlaySelect = useCallback((overlay: ReleaseOverlay | null) => {
-    setSelectedOverlay(overlay);
-  }, []);
-
   // Handle zone navigation (drill down into zone)
   const handleNavigateToZone = useCallback(async (zoneRef: string) => {
-    if (!baseTilesUrl || !manifest) return;
+    if (!baseTilesUrl || !manifest || !projectSlug) return;
 
     setState('loading');
 
@@ -174,6 +141,9 @@ function App() {
       // Zone tiles are stored at /tiles/{level}/
       const zoneTilesUrl = `${baseTilesUrl}/tiles/${zoneInfo.level}`;
 
+      // Update browser URL
+      updateUrl(projectSlug, zoneInfo.level);
+
       setManifest(zoneManifest);
       setTilesBaseUrl(zoneTilesUrl);
       setSelectedOverlay(null);
@@ -188,11 +158,11 @@ function App() {
       setError(err instanceof Error ? err.message : 'Failed to load zone');
       setState('error');
     }
-  }, [baseTilesUrl, manifest, locale]);
+  }, [baseTilesUrl, manifest, locale, projectSlug]);
 
   // Handle back navigation (return to project level)
   const handleBackToProject = useCallback(async () => {
-    if (!baseTilesUrl) return;
+    if (!baseTilesUrl || !projectSlug) return;
 
     setState('loading');
 
@@ -207,6 +177,9 @@ function App() {
 
       const projectManifest: ReleaseManifest = await response.json();
 
+      // Update browser URL (remove zone param)
+      updateUrl(projectSlug);
+
       const projectTilesUrl = `${baseTilesUrl}/tiles/project`;
       setManifest(projectManifest);
       setTilesBaseUrl(projectTilesUrl);
@@ -218,7 +191,103 @@ function App() {
       setError(err instanceof Error ? err.message : 'Failed to return to project');
       setState('error');
     }
-  }, [baseTilesUrl]);
+  }, [baseTilesUrl, projectSlug]);
+
+  // Handle overlay selection
+  // For zones at project level: navigate directly instead of showing panel
+  const handleOverlaySelect = useCallback((overlay: ReleaseOverlay | null) => {
+    if (!overlay) {
+      setSelectedOverlay(null);
+      return;
+    }
+
+    // If clicking a zone at project level, navigate directly to it
+    if (overlay.overlay_type === 'zone' && currentLevel.level === 'project' && overlay.layer) {
+      handleNavigateToZone(overlay.layer);
+      return;
+    }
+
+    // For units or other overlays, show selection panel
+    setSelectedOverlay(overlay);
+  }, [currentLevel.level, handleNavigateToZone]);
+
+  // Initialize on mount and handle URL zone parameter
+  useEffect(() => {
+    const { project, zone } = parseUrl();
+    if (!project) {
+      setError('No project specified. Use ?project=<slug> or /master-plan/<slug>');
+      setState('error');
+      return;
+    }
+
+    setProjectSlug(project);
+
+    // Load release, then navigate to zone if specified in URL
+    const initializeWithZone = async () => {
+      await loadRelease(project);
+      // Zone navigation will be triggered after manifest loads if zone param exists
+      if (zone) {
+        // Store initial zone to navigate to after release loads
+        sessionStorage.setItem('pendingZone', zone);
+      }
+    };
+
+    initializeWithZone();
+  }, [loadRelease]);
+
+  // Handle pending zone navigation after release loads
+  useEffect(() => {
+    if (state === 'ready' && manifest) {
+      const pendingZone = sessionStorage.getItem('pendingZone');
+      if (pendingZone) {
+        sessionStorage.removeItem('pendingZone');
+        handleNavigateToZone(pendingZone);
+      }
+    }
+  }, [state, manifest, handleNavigateToZone]);
+
+  // Handle browser back/forward buttons
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      const { zone } = event.state || parseUrl();
+
+      if (zone && currentLevel.level === 'project') {
+        // Navigate to zone
+        handleNavigateToZone(zone);
+      } else if (!zone && currentLevel.level === 'zone') {
+        // Navigate back to project
+        handleBackToProject();
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [currentLevel, handleNavigateToZone, handleBackToProject]);
+
+  // Subscribe to status updates
+  useEffect(() => {
+    if (!projectSlug || state !== 'ready') return;
+
+    const unsubscribe = api.subscribeToStatusUpdates(
+      projectSlug,
+      (newStatuses) => {
+        setStatuses((prev) => {
+          const updated = { ...prev };
+          for (const [ref, status] of Object.entries(newStatuses)) {
+            updated[ref] = isValidStatus(status) ? status : 'available';
+          }
+          return updated;
+        });
+      },
+      (err) => {
+        console.warn('Status SSE error:', err);
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [projectSlug, state]);
 
   // Handle retry
   const handleRetry = useCallback(() => {
