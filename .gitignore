@@ -26,6 +26,7 @@ yarn-error.log*
 dist/
 build/
 *.local
+.wrangler/
 
 # IDE
 .idea/
