@@ -900,17 +900,17 @@ Floor Click: Navigates to floor plan view
 
 ## Implementation Plan
 
-### Phase 1: Data Model & Admin APIs
+### Phase 1: Data Model & Admin APIs ✅
 **Duration**: Week 1
 **Priority**: P0
 
-- [ ] Create database migrations for building tables
-- [ ] Implement Building model and CRUD
-- [ ] Implement BuildingView model and CRUD
-- [ ] Implement Stack model and bulk operations
-- [ ] Implement BuildingUnit model with auto-generate
-- [ ] Implement ViewOverlayMapping model
-- [ ] Add building endpoints to admin router
+- [x] Create database migrations for building tables
+- [x] Implement Building model and CRUD
+- [x] Implement BuildingView model and CRUD
+- [x] Implement Stack model and bulk operations
+- [x] Implement BuildingUnit model with auto-generate
+- [x] Implement ViewOverlayMapping model
+- [x] Add building endpoints to admin router
 - [ ] Write unit tests for building service
 
 ### Phase 2: View Asset Pipeline
