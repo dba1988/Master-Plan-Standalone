@@ -926,17 +926,17 @@ Floor Click: Navigates to floor plan view
 - [x] Implement SVG import for floor plan overlays
 - [x] Store overlay mappings in database
 
-### Phase 3: Building Manifest & Publish
+### Phase 3: Building Manifest & Publish ✅
 **Duration**: Week 3
 **Priority**: P0
 
-- [ ] Create BuildingManifest schema
-- [ ] Implement building manifest generation service
-- [ ] Generate per-view stack overlay files
-- [ ] Generate floor plan overlay files
-- [ ] Extend publish job to include buildings
-- [ ] Upload building manifests to R2
-- [ ] Add building reference to project manifest
+- [x] Create BuildingManifest schema
+- [x] Implement building manifest generation service
+- [x] Generate per-view stack overlay files
+- [x] Generate floor plan overlay files
+- [x] Extend publish job to include buildings
+- [x] Upload building manifests to R2
+- [x] Add building reference to project manifest
 
 ### Phase 4: Public Viewer - Building View
 **Duration**: Week 4

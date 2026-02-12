@@ -16,9 +16,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 COPY_WORKERS = 20
 
 from app.models.job import Job
-from app.schemas.release import ZoneManifestInfo
+from app.schemas.release import ZoneManifestInfo, BuildingManifestInfo
 from app.services.job_service import JobService
 from app.services.release_service import ReleaseService, generate_release_id
+from app.services.building_release_service import BuildingReleaseService
 from app.services.storage_service import storage_service
 
 
@@ -326,6 +327,65 @@ async def run_publish_job(
             )
             await job_service.add_log(job_id, f"Updated project manifest with {len(zone_info_list)} zone references", "info")
 
+        # Generate building manifests and overlay files
+        building_release_service = BuildingReleaseService(db)
+        buildings = await building_release_service.get_project_buildings(project_slug)
+        building_info_list: list[BuildingManifestInfo] = []
+        building_manifests_uploaded = 0
+
+        if buildings:
+            await job_service.update_progress(job_id, 80, f"Generating {len(buildings)} building manifests...")
+            await job_service.add_log(job_id, f"Found {len(buildings)} buildings to publish", "info")
+
+            for building in buildings:
+                try:
+                    # Generate all artifacts for this building
+                    artifacts = await building_release_service.generate_building_artifacts(
+                        building=building,
+                        release_path=release_path,
+                    )
+
+                    # Upload each artifact
+                    for artifact_path, content in artifacts.items():
+                        artifact_key = f"{release_path}/{artifact_path}"
+                        await storage_service.storage.upload_file(
+                            key=artifact_key,
+                            body=content.encode() if isinstance(content, str) else content,
+                            content_type="application/json",
+                        )
+
+                    # Add to building info list
+                    building_info_list.append(BuildingManifestInfo(
+                        ref=building.ref,
+                        name=building.name,
+                        manifest_path=f"buildings/{building.ref}.json",
+                    ))
+
+                    building_manifests_uploaded += 1
+                    await job_service.add_log(
+                        job_id,
+                        f"Uploaded building {building.ref} with {len(artifacts)} files",
+                        "info"
+                    )
+
+                except Exception as e:
+                    await job_service.add_log(
+                        job_id,
+                        f"Failed to generate building {building.ref}: {e}",
+                        "error"
+                    )
+
+        # Add building info to project manifest and re-upload
+        if building_info_list:
+            manifest.buildings = building_info_list
+            manifest_json = manifest.model_dump_json(indent=2)
+            await storage_service.storage.upload_file(
+                key=manifest_key,
+                body=manifest_json.encode(),
+                content_type="application/json",
+            )
+            await job_service.add_log(job_id, f"Updated project manifest with {len(building_info_list)} building references", "info")
+
         await job_service.update_progress(job_id, 85, "Finalizing manifests...")
 
         # Get release URL
@@ -357,6 +417,8 @@ async def run_publish_job(
             "zone_count": len(manifest.overlays),  # Project manifest contains zones
             "zone_levels": zone_levels,
             "zone_manifests_uploaded": zone_manifests_uploaded,
+            "building_count": len(building_info_list),
+            "building_manifests_uploaded": building_manifests_uploaded,
             "checksum": manifest.checksum,
             "build_id": build_id,
             "tiles_copied": total_copied,

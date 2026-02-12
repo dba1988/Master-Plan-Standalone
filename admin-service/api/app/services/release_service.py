@@ -265,6 +265,12 @@ class ReleaseService:
         overlay_data = [o.model_dump() for o in release_overlays]
         checksum = self._calculate_checksum(overlay_data)
 
+        # Get building manifest info (only for project level)
+        from app.schemas.release import BuildingManifestInfo
+        buildings = []
+        if level == "project":
+            buildings = await self._get_building_manifest_infos(project.id)
+
         return ReleaseManifest(
             version=3,
             release_id=release_id,
@@ -274,8 +280,34 @@ class ReleaseService:
             config=release_config,
             tiles=tiles,
             overlays=release_overlays,
+            buildings=buildings,
             checksum=checksum,
         )
+
+    async def _get_building_manifest_infos(
+        self,
+        project_id: UUID,
+    ) -> List:
+        """Get building manifest info for all active buildings."""
+        from app.models.building import Building
+        from app.schemas.release import BuildingManifestInfo
+
+        result = await self.db.execute(
+            select(Building).where(
+                Building.project_id == project_id,
+                Building.is_active == True
+            ).order_by(Building.sort_order, Building.ref)
+        )
+        buildings = result.scalars().all()
+
+        return [
+            BuildingManifestInfo(
+                ref=b.ref,
+                name=b.name,
+                manifest_path=f"buildings/{b.ref}.json",
+            )
+            for b in buildings
+        ]
 
     async def get_zone_levels(self, project_slug: str) -> List[str]:
         """Get list of zone refs that have associated overlays (units)."""

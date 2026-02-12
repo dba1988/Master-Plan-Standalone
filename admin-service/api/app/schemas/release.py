@@ -54,6 +54,13 @@ class ZoneManifestInfo(BaseModel):
     label: Optional[Dict[str, str]] = None
 
 
+class BuildingManifestInfo(BaseModel):
+    """Info about an available building manifest."""
+    ref: str  # Building ref (e.g., "tower-a")
+    name: Dict[str, str]  # Localized name
+    manifest_path: str  # Path to building manifest (e.g., "buildings/tower-a.json")
+
+
 class ReleaseManifest(BaseModel):
     """
     Complete release.json manifest.
@@ -71,6 +78,7 @@ class ReleaseManifest(BaseModel):
     tiles: Optional[TileConfig] = None
     overlays: List[ReleaseOverlay] = []
     zones: List[ZoneManifestInfo] = []  # Available zone manifests (project level only)
+    buildings: List[BuildingManifestInfo] = []  # Available building manifests
 
     checksum: str = Field(..., description="SHA256 hash of overlay data")
 
