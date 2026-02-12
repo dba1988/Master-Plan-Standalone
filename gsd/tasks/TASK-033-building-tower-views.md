@@ -913,18 +913,18 @@ Floor Click: Navigates to floor plan view
 - [x] Add building endpoints to admin router
 - [ ] Write unit tests for building service
 
-### Phase 2: View Asset Pipeline
+### Phase 2: View Asset Pipeline ✅
 **Duration**: Week 2
 **Priority**: P0
 
-- [ ] Implement view image upload flow (presigned URLs)
-- [ ] Create building tile generation job
-- [ ] Support elevation images (tall aspect ratio)
-- [ ] Support rotation images (square)
-- [ ] Support floor plan images
-- [ ] Implement SVG import for stack overlays
-- [ ] Implement SVG import for floor plan overlays
-- [ ] Store overlay mappings in database
+- [x] Implement view image upload flow (presigned URLs)
+- [x] Create building tile generation job
+- [x] Support elevation images (tall aspect ratio)
+- [x] Support rotation images (square)
+- [x] Support floor plan images
+- [x] Implement SVG import for stack overlays
+- [x] Implement SVG import for floor plan overlays
+- [x] Store overlay mappings in database
 
 ### Phase 3: Building Manifest & Publish
 **Duration**: Week 3

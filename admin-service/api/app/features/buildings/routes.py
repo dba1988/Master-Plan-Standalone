@@ -4,6 +4,8 @@ Building CRUD endpoints.
 Supports:
 - Building management (create, list, update, delete)
 - Building views (elevation, rotation, floor plan)
+- View image upload and tile generation
+- SVG import for stack/unit overlays
 - Stacks (vertical unit groupings)
 - Building units (individual apartments)
 - View overlay mappings (geometry per view)
@@ -11,12 +13,17 @@ Supports:
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.lib.database import get_db
 from app.lib.deps import get_current_user, require_editor
+from app.models.building import Building
+from app.models.project import Project
 from app.models.user import User
+from app.models.version import ProjectVersion
 from app.schemas.building import (
     BuildingCreate,
     BuildingUpdate,
@@ -44,9 +51,42 @@ from app.schemas.building import (
     BulkOverlayMappingResponse,
     ViewType,
 )
+from app.schemas.job import JobCreateResponse
 from app.services.building_service import BuildingService
+from app.services.job_service import JobService
+from app.services.storage_service import storage_service
+from app.services.svg_parser import svg_parser
 
 router = APIRouter(tags=["Buildings"])
+
+
+# ============================================
+# REQUEST/RESPONSE SCHEMAS FOR VIEW ASSETS
+# ============================================
+
+class ViewUploadUrlRequest(BaseModel):
+    """Request for view image upload URL."""
+    filename: str
+    content_type: str = "image/png"
+
+
+class ViewUploadUrlResponse(BaseModel):
+    """Response with presigned upload URL."""
+    upload_url: str
+    storage_path: str
+    expires_in_seconds: int
+
+
+class ViewUploadConfirmRequest(BaseModel):
+    """Confirm view image upload."""
+    storage_path: str
+
+
+class SVGImportRequest(BaseModel):
+    """Request to import overlays from SVG."""
+    svg_content: str
+    target_type: str = "stack"  # 'stack' or 'unit'
+    id_pattern: Optional[str] = None
 
 
 # ============================================
@@ -788,3 +828,411 @@ async def delete_overlay_mapping(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Overlay mapping not found"
         )
+
+
+# ============================================
+# VIEW IMAGE UPLOAD ENDPOINTS
+# ============================================
+
+@router.post(
+    "/projects/{slug}/buildings/{building_id}/views/{view_id}/upload-url",
+    response_model=ViewUploadUrlResponse,
+)
+async def request_view_upload_url(
+    slug: str,
+    building_id: UUID,
+    view_id: UUID,
+    data: ViewUploadUrlRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    """
+    Request a presigned URL for uploading a view image.
+
+    Use this for elevation, rotation, or floor plan images.
+    After upload, call the confirm endpoint.
+    """
+    service = BuildingService(db)
+    view = await service.get_view(
+        project_slug=slug,
+        building_id=building_id,
+        view_id=view_id,
+    )
+
+    if not view:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="View not found"
+        )
+
+    # Get building for path
+    building = await service.get_building(project_slug=slug, building_id=building_id)
+
+    # Generate storage path
+    ext = data.filename.split(".")[-1] if "." in data.filename else "png"
+    storage_path = f"mp/{slug}/buildings/{building.ref}/views/{view.ref}.{ext}"
+
+    # Generate presigned upload URL
+    upload_url = await storage_service.storage.get_presigned_upload_url(
+        key=storage_path,
+        content_type=data.content_type,
+        expires_in=3600,
+    )
+
+    return ViewUploadUrlResponse(
+        upload_url=upload_url,
+        storage_path=storage_path,
+        expires_in_seconds=3600,
+    )
+
+
+@router.post(
+    "/projects/{slug}/buildings/{building_id}/views/{view_id}/confirm-upload",
+    response_model=BuildingViewResponse,
+)
+async def confirm_view_upload(
+    slug: str,
+    building_id: UUID,
+    view_id: UUID,
+    data: ViewUploadConfirmRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    """
+    Confirm view image upload and update view record.
+
+    Call this after successfully uploading the image using the presigned URL.
+    """
+    service = BuildingService(db)
+    view = await service.get_view(
+        project_slug=slug,
+        building_id=building_id,
+        view_id=view_id,
+    )
+
+    if not view:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="View not found"
+        )
+
+    # Verify file exists in storage
+    exists = await storage_service.storage.file_exists(data.storage_path)
+    if not exists:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File not found in storage"
+        )
+
+    # Update view with asset path
+    from app.schemas.building import BuildingViewUpdate
+    updated_view = await service.update_view(
+        project_slug=slug,
+        building_id=building_id,
+        view_id=view_id,
+        data=BuildingViewUpdate(asset_path=data.storage_path, tiles_generated=False),
+    )
+
+    return BuildingViewResponse.model_validate(updated_view)
+
+
+# ============================================
+# BUILDING TILE GENERATION
+# ============================================
+
+@router.post(
+    "/projects/{slug}/buildings/{building_id}/generate-tiles",
+    response_model=JobCreateResponse,
+)
+async def generate_building_tiles(
+    slug: str,
+    building_id: UUID,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    """
+    Start tile generation for all views of a building.
+
+    Returns job ID for tracking progress via /jobs/{id}/stream.
+    """
+    service = BuildingService(db)
+    building = await service.get_building(project_slug=slug, building_id=building_id)
+
+    if not building:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Building not found"
+        )
+
+    # Get project for job creation
+    project_result = await db.execute(
+        select(Project).where(Project.slug == slug)
+    )
+    project = project_result.scalar_one_or_none()
+
+    # Check draft version
+    version_result = await db.execute(
+        select(ProjectVersion).where(
+            ProjectVersion.project_id == project.id,
+            ProjectVersion.status == "draft"
+        ).limit(1)
+    )
+    version = version_result.scalar_one_or_none()
+
+    if not version:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No draft version exists"
+        )
+
+    # Create job
+    job_service = JobService(db)
+    job = await job_service.create_job(
+        job_type="building_tiles",
+        project_id=project.id,
+        version_id=version.id,
+        created_by=current_user.id,
+        metadata={
+            "building_id": str(building_id),
+            "building_ref": building.ref,
+        }
+    )
+
+    # Generate build path
+    from app.services.release_service import generate_release_id
+    build_id = generate_release_id().replace("rel_", "bld_")
+    build_path = f"mp/{slug}/builds/{build_id}"
+
+    # Start background task
+    background_tasks.add_task(
+        _run_building_tile_job,
+        job_id=job.id,
+        project_slug=slug,
+        building_id=building_id,
+        build_path=build_path,
+    )
+
+    return JobCreateResponse(
+        job_id=job.id,
+        status="queued",
+        message=f"Building tile generation started for {building.ref}"
+    )
+
+
+async def _run_building_tile_job(
+    job_id: UUID,
+    project_slug: str,
+    building_id: UUID,
+    build_path: str,
+):
+    """Run building tile generation with new database session."""
+    from app.lib.database import async_session_maker
+    from app.jobs.building_build_job import run_building_build_job
+
+    async with async_session_maker() as db:
+        try:
+            await run_building_build_job(
+                db=db,
+                job_id=job_id,
+                project_slug=project_slug,
+                building_id=building_id,
+                build_path=build_path,
+            )
+        except Exception as e:
+            print(f"Building tile job {job_id} failed: {e}")
+
+
+# ============================================
+# SVG IMPORT FOR VIEW OVERLAYS
+# ============================================
+
+@router.post(
+    "/projects/{slug}/buildings/{building_id}/views/{view_id}/import-svg",
+)
+async def import_view_overlays_from_svg(
+    slug: str,
+    building_id: UUID,
+    view_id: UUID,
+    data: SVGImportRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    """
+    Import stack or unit overlays from SVG content.
+
+    Parses the SVG and creates overlay mappings for the view.
+    Path IDs in the SVG should match stack/unit refs.
+
+    - **target_type**: 'stack' for elevation views, 'unit' for floor plans
+    - **id_pattern**: Optional regex to filter paths by ID
+    """
+    service = BuildingService(db)
+
+    view = await service.get_view(
+        project_slug=slug,
+        building_id=building_id,
+        view_id=view_id,
+    )
+
+    if not view:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="View not found"
+        )
+
+    # Parse SVG
+    try:
+        parsed = svg_parser.parse_svg(data.svg_content, id_pattern=data.id_pattern)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to parse SVG: {str(e)}"
+        )
+
+    if not parsed:
+        return {
+            "success": True,
+            "parsed_count": 0,
+            "created": 0,
+            "updated": 0,
+            "errors": [],
+            "message": "No matching paths found in SVG",
+        }
+
+    # Get viewBox from SVG
+    view_box = svg_parser.get_viewbox(data.svg_content)
+
+    # Update view's viewBox if found
+    if view_box and not view.view_box:
+        from app.schemas.building import BuildingViewUpdate
+        await service.update_view(
+            project_slug=slug,
+            building_id=building_id,
+            view_id=view_id,
+            data=BuildingViewUpdate(view_box=view_box),
+        )
+
+    # Convert to overlay mapping format
+    from app.schemas.building import BulkOverlayMappingItem
+    mappings = [
+        BulkOverlayMappingItem(
+            target_type=data.target_type,
+            target_ref=p.id,
+            geometry={"type": "path", "d": p.path_data},
+            label_position={"x": p.centroid[0], "y": p.centroid[1]},
+            sort_order=idx,
+        )
+        for idx, p in enumerate(parsed)
+    ]
+
+    # Bulk upsert
+    result = await service.bulk_upsert_overlay_mappings(
+        project_slug=slug,
+        building_id=building_id,
+        view_id=view_id,
+        mappings=mappings,
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to import overlays"
+        )
+
+    created, updated, errors = result
+
+    return {
+        "success": True,
+        "parsed_count": len(parsed),
+        "created": created,
+        "updated": updated,
+        "errors": errors,
+        "view_box": view_box,
+        "message": f"Imported {created} new mappings, updated {updated} existing",
+    }
+
+
+@router.post(
+    "/projects/{slug}/buildings/{building_id}/import-stacks-svg",
+)
+async def import_stacks_from_svg(
+    slug: str,
+    building_id: UUID,
+    data: SVGImportRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    """
+    Import stack definitions from SVG content.
+
+    Creates stacks from path elements in the SVG.
+    Each path ID becomes a stack ref.
+    Floor ranges can be specified in path metadata or defaults are used.
+
+    This is different from import-svg on a view - this creates
+    the actual Stack entities, not overlay mappings.
+    """
+    service = BuildingService(db)
+
+    building = await service.get_building(project_slug=slug, building_id=building_id)
+    if not building:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Building not found"
+        )
+
+    # Parse SVG
+    try:
+        parsed = svg_parser.parse_svg(data.svg_content, id_pattern=data.id_pattern)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to parse SVG: {str(e)}"
+        )
+
+    if not parsed:
+        return {
+            "success": True,
+            "parsed_count": 0,
+            "created": 0,
+            "updated": 0,
+            "errors": [],
+        }
+
+    # Convert to stack format
+    from app.schemas.building import BulkStackItem
+    stacks = [
+        BulkStackItem(
+            ref=p.id,
+            label={"en": p.id},
+            floor_start=building.floors_start,
+            floor_end=building.floors_start + building.floors_count - 1,
+            sort_order=idx,
+        )
+        for idx, p in enumerate(parsed)
+    ]
+
+    # Bulk upsert stacks
+    result = await service.bulk_upsert_stacks(
+        project_slug=slug,
+        building_id=building_id,
+        stacks=stacks,
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to import stacks"
+        )
+
+    created, updated, errors = result
+
+    return {
+        "success": True,
+        "parsed_count": len(parsed),
+        "created": created,
+        "updated": updated,
+        "errors": errors,
+        "message": f"Imported {created} new stacks, updated {updated} existing",
+    }
